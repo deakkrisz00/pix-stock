@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#6366f1" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/pix_icon_192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <title>Pix Készletkezelő</title>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Pix Készletkezelő</h1>
+    <button id="theme-toggle" aria-label="Toggle theme">🌙</button>
+  </header>
+  <nav class="sidebar" id="sidebar">
+    <ul>
+      <li data-role="admin" class="nav-item active">Készlet</li>
+      <li data-role="admin" class="nav-item">Tollak</li>
+      <li data-role="worker" class="nav-item">Készlet</li>
+    </ul>
+  </nav>
+  <main class="content" id="main-content">
+    <section id="inventory-section" class="section">
+      <h2>Készlet Lista</h2>
+      <button id="add-item" class="cta-button">Új tétel</button>
+      <table class="glass-table" id="inventory-table">
+        <thead>
+          <tr>
+            <th>Toll név</th>
+            <th>Mennyiség</th>
+            <th>Akció</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+  <footer class="app-footer">
+    <p>© 2026 Pix Készletkezelő – verzió 1.0</p>
+  </footer>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "Pix Készletkezelő",
+  "short_name": "Pix Stock",
+  "description": "Neves toll készletkezelő rendszer szuvenírbódék számára",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "lang": "hu",
+  "categories": ["business", "utilities"],
+  "icons": [
+    {
+      "src": "icons/pix_icon_192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/pix_icon_512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}
