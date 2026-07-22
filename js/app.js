@@ -3,17 +3,17 @@
 
 // ==== Configuration ==== //
 // Replace these placeholder values with your Supabase project details.
-const SUPABASE_URL = "https://your-project.supabase.co";
-const SUPABASE_ANON_KEY = "public-anon-key";
+const SUPABASE_URL = "https://your-project.supabase.co"; // TODO: replace with your Supabase URL
+const SUPABASE_ANON_KEY = "public-anon-key"; // TODO: replace with your anon key
 
 // Initialize Supabase client
-let supabase = null;
+let supabaseClient = null;
 if (typeof window !== "undefined") {
   // Load Supabase from CDN dynamically
   const script = document.createElement("script");
   script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.1/dist/umd/supabase.js";
   script.onload = () => {
-    supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     initApp();
   };
   document.head.appendChild(script);
@@ -51,7 +51,7 @@ themeToggleBtn.addEventListener("click", toggleTheme);
 
 // ==== Inventory Operations ==== //
 async function fetchInventory() {
-  const { data, error } = await supabase.from("inventory").select("id, name, quantity");
+  const { data, error } = await supabaseClient.from("inventory").select("id, name, quantity");
   if (error) {
     console.error("Error fetching inventory:", error);
     return [];
@@ -86,7 +86,7 @@ function addItem() {
   if (!name) return;
   const qtyStr = prompt("Mennyiség:");
   const quantity = parseInt(qtyStr, 10) || 0;
-  supabase.from("inventory").insert({ name, quantity })
+  supabaseClient.from("inventory").insert({ name, quantity })
     .then(({ data, error }) => {
       if (error) return console.error(error);
       loadAndRender();
@@ -98,7 +98,7 @@ function editItem(item) {
   if (newName === null) return;
   const qtyStr = prompt("Új mennyiség:", item.quantity);
   const newQty = parseInt(qtyStr, 10);
-  supabase.from("inventory").update({ name: newName, quantity: newQty })
+  supabaseClient.from("inventory").update({ name: newName, quantity: newQty })
     .eq("id", item.id)
     .then(({ error }) => {
       if (error) return console.error(error);
@@ -108,7 +108,7 @@ function editItem(item) {
 
 function deleteItem(id) {
   if (!confirm("Biztos törölni?")) return;
-  supabase.from("inventory").delete().eq("id", id)
+  supabaseClient.from("inventory").delete().eq("id", id)
     .then(({ error }) => {
       if (error) return console.error(error);
       loadAndRender();
@@ -119,7 +119,7 @@ addItemBtn.addEventListener("click", addItem);
 
 // ==== Real‑time subscription ==== //
 function subscribeRealtime() {
-  supabase.channel("public:inventory")
+  supabaseClient.channel("public:inventory")
     .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, payload => {
       console.log("Realtime update", payload);
       loadAndRender();
