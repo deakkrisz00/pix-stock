@@ -2,150 +2,178 @@
 // Main JavaScript for Pix Készletkezelő PWA
 
 // ==== Configuration ==== //
-// Replace these placeholder values with your Supabase project details.
-const SUPABASE_URL = "https://your-project.supabase.co"; // TODO: replace with your Supabase URL
-const SUPABASE_ANON_KEY = "public-anon-key"; // TODO: replace with your anon key
+const SUPABASE_URL = "https://your-project.supabase.co"; // TODO: replace
+const SUPABASE_ANON_KEY = "public-anon-key";             // TODO: replace
 
-// Initialize Supabase client
 let supabaseClient = null;
-if (typeof window !== "undefined") {
-  // Load Supabase from CDN dynamically
+let currentRole = "admin"; // "admin" | "worker"
+
+// ==== Bootstrap ==== //
+// Wait for the DOM to be fully ready before touching any elements
+document.addEventListener("DOMContentLoaded", () => {
+
+  // ==== UI Element references (safe – DOM is ready) ==== //
+  const inventoryTableBody = document.querySelector("#inventory-table tbody");
+  const addItemBtn         = document.getElementById("add-item");
+  const themeToggleBtn     = document.getElementById("theme-toggle");
+
+  // ==== Theme ==== //
+  function toggleTheme() {
+    document.body.classList.toggle("dark-theme");
+    const isDark = document.body.classList.contains("dark-theme");
+    themeToggleBtn.textContent = isDark ? "☀️" : "🌙";
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  }
+
+  // Restore saved theme
+  if (localStorage.getItem("theme") === "dark") {
+    document.body.classList.add("dark-theme");
+    if (themeToggleBtn) themeToggleBtn.textContent = "☀️";
+  }
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener("click", toggleTheme);
+    themeToggleBtn.addEventListener("touchend", (e) => {
+      e.preventDefault(); // prevent ghost click on mobile
+      toggleTheme();
+    });
+  }
+
+  // ==== Role visibility ==== //
+  function applyRoleVisibility() {
+    document.querySelectorAll("[data-role='admin']").forEach(el => {
+      el.style.display = currentRole === "admin" ? "" : "none";
+    });
+    document.querySelectorAll("[data-role='worker']").forEach(el => {
+      el.style.display = currentRole === "worker" ? "" : "none";
+    });
+  }
+
+  // ==== Inventory rendering ==== //
+  async function fetchInventory() {
+    const { data, error } = await supabaseClient
+      .from("inventory")
+      .select("id, name, quantity");
+    if (error) {
+      console.error("Error fetching inventory:", error);
+      return [];
+    }
+    return data;
+  }
+
+  function renderRow(item) {
+    const tr = document.createElement("tr");
+    tr.dataset.id = item.id;
+    tr.innerHTML = `
+      <td>${item.name}</td>
+      <td>${item.quantity}</td>
+      <td>
+        <button class="edit-btn" aria-label="Szerkesztés">✏️</button>
+        <button class="del-btn"  aria-label="Törlés">🗑️</button>
+      </td>`;
+
+    const editBtn = tr.querySelector(".edit-btn");
+    const delBtn  = tr.querySelector(".del-btn");
+
+    // Both click (PC) and touchend (mobile) are handled
+    function handleEdit(e) { e.preventDefault(); editItem(item); }
+    function handleDel(e)  { e.preventDefault(); deleteItem(item.id); }
+
+    editBtn.addEventListener("click",    handleEdit);
+    editBtn.addEventListener("touchend", handleEdit);
+    delBtn.addEventListener("click",     handleDel);
+    delBtn.addEventListener("touchend",  handleDel);
+
+    inventoryTableBody.appendChild(tr);
+  }
+
+  async function loadAndRender() {
+    inventoryTableBody.innerHTML = "";
+    const items = await fetchInventory();
+    items.forEach(renderRow);
+  }
+
+  // ==== CRUD ==== //
+  function addItem() {
+    const name = prompt("Toll név:");
+    if (!name) return;
+    const quantity = parseInt(prompt("Mennyiség:"), 10) || 0;
+    supabaseClient.from("inventory").insert({ name, quantity })
+      .then(({ error }) => {
+        if (error) return console.error(error);
+        loadAndRender();
+      });
+  }
+
+  function editItem(item) {
+    const newName = prompt("Új toll név:", item.name);
+    if (newName === null) return;
+    const newQty = parseInt(prompt("Új mennyiség:", item.quantity), 10) || 0;
+    supabaseClient.from("inventory").update({ name: newName, quantity: newQty })
+      .eq("id", item.id)
+      .then(({ error }) => {
+        if (error) return console.error(error);
+        loadAndRender();
+      });
+  }
+
+  function deleteItem(id) {
+    if (!confirm("Biztos törölni?")) return;
+    supabaseClient.from("inventory").delete().eq("id", id)
+      .then(({ error }) => {
+        if (error) return console.error(error);
+        loadAndRender();
+      });
+  }
+
+  // Wire up "Új tétel" button
+  if (addItemBtn) {
+    addItemBtn.addEventListener("click", addItem);
+    addItemBtn.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      addItem();
+    });
+  }
+
+  // ==== Real-time subscription ==== //
+  function subscribeRealtime() {
+    supabaseClient.channel("public:inventory")
+      .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, () => {
+        loadAndRender();
+      })
+      .subscribe();
+  }
+
+  // ==== Initialise app after Supabase is ready ==== //
+  function initApp() {
+    applyRoleVisibility();
+    loadAndRender();
+    subscribeRealtime();
+  }
+
+  // ==== Load Supabase from CDN, then start the app ==== //
   const script = document.createElement("script");
   script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.1/dist/umd/supabase.js";
   script.onload = () => {
     supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     initApp();
   };
+  script.onerror = () => {
+    console.error("Nem sikerült betölteni a Supabase SDK-t. Ellenőrizd az internet-kapcsolatot.");
+  };
   document.head.appendChild(script);
-}
 
-// ==== UI Elements ==== //
-const inventoryTableBody = document.querySelector("#inventory-table tbody");
-const addItemBtn = document.getElementById("add-item");
-const themeToggleBtn = document.getElementById("theme-toggle");
-const sidebar = document.getElementById("sidebar");
+  // ==== Service Worker ==== //
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js")
+      .then(reg => console.log("Service Worker registered", reg))
+      .catch(err => console.warn("SW registration failed", err));
 
-// Simple role handling – in a real app this would come from auth
-let currentRole = "admin"; // or "worker"
-
-function applyRoleVisibility() {
-  const adminItems = document.querySelectorAll("[data-role='admin']");
-  const workerItems = document.querySelectorAll("[data-role='worker']");
-  if (currentRole === "admin") {
-    adminItems.forEach(el => el.style.display = "block");
-    workerItems.forEach(el => el.style.display = "none");
-  } else {
-    adminItems.forEach(el => el.style.display = "none");
-    workerItems.forEach(el => el.style.display = "block");
+    navigator.serviceWorker.addEventListener("message", event => {
+      if (event.data?.type === "SYNC_NEEDED") {
+        console.log("Background sync triggered.");
+      }
+    });
   }
-}
 
-// ==== Theme ==== //
-function toggleTheme() {
-  document.body.classList.toggle("dark-theme");
-  const isDark = document.body.classList.contains("dark-theme");
-  themeToggleBtn.textContent = isDark ? "☀️" : "🌙";
-}
-
-themeToggleBtn.addEventListener("click", toggleTheme);
-
-// ==== Inventory Operations ==== //
-async function fetchInventory() {
-  const { data, error } = await supabaseClient.from("inventory").select("id, name, quantity");
-  if (error) {
-    console.error("Error fetching inventory:", error);
-    return [];
-  }
-  return data;
-}
-
-function renderRow(item) {
-  const tr = document.createElement("tr");
-  tr.dataset.id = item.id;
-  tr.innerHTML = `
-    <td>${item.name}</td>
-    <td>${item.quantity}</td>
-    <td>
-      <button class="edit-btn">✏️</button>
-      <button class="del-btn">🗑️</button>
-    </td>`;
-  // Edit handler (simple prompt for demo)
-  tr.querySelector(".edit-btn").addEventListener("click", () => editItem(item));
-  tr.querySelector(".del-btn").addEventListener("click", () => deleteItem(item.id));
-  inventoryTableBody.appendChild(tr);
-}
-
-async function loadAndRender() {
-  inventoryTableBody.innerHTML = "";
-  const items = await fetchInventory();
-  items.forEach(renderRow);
-}
-
-function addItem() {
-  const name = prompt("Toll név:");
-  if (!name) return;
-  const qtyStr = prompt("Mennyiség:");
-  const quantity = parseInt(qtyStr, 10) || 0;
-  supabaseClient.from("inventory").insert({ name, quantity })
-    .then(({ data, error }) => {
-      if (error) return console.error(error);
-      loadAndRender();
-    });
-}
-
-function editItem(item) {
-  const newName = prompt("Új toll név:", item.name);
-  if (newName === null) return;
-  const qtyStr = prompt("Új mennyiség:", item.quantity);
-  const newQty = parseInt(qtyStr, 10);
-  supabaseClient.from("inventory").update({ name: newName, quantity: newQty })
-    .eq("id", item.id)
-    .then(({ error }) => {
-      if (error) return console.error(error);
-      loadAndRender();
-    });
-}
-
-function deleteItem(id) {
-  if (!confirm("Biztos törölni?")) return;
-  supabaseClient.from("inventory").delete().eq("id", id)
-    .then(({ error }) => {
-      if (error) return console.error(error);
-      loadAndRender();
-    });
-}
-
-addItemBtn.addEventListener("click", addItem);
-
-// ==== Real‑time subscription ==== //
-function subscribeRealtime() {
-  supabaseClient.channel("public:inventory")
-    .on("postgres_changes", { event: "*", schema: "public", table: "inventory" }, payload => {
-      console.log("Realtime update", payload);
-      loadAndRender();
-    })
-    .subscribe();
-}
-
-// ==== Service Worker registration ==== //
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js").then(reg => {
-    console.log("Service Worker registered", reg);
-  });
-}
-
-// ==== Initialise app after Supabase is ready ==== //
-function initApp() {
-  applyRoleVisibility();
-  loadAndRender();
-  subscribeRealtime();
-}
-
-// Listen for background sync messages from the Service Worker
-if (navigator.serviceWorker) {
-  navigator.serviceWorker.addEventListener("message", event => {
-    if (event.data && event.data.type === "SYNC_NEEDED") {
-      console.log("Background sync triggered – you could push pending changes here.");
-    }
-  });
-}
+}); // end DOMContentLoaded
