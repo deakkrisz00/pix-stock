@@ -49,6 +49,12 @@
             <button id="add-item" class="cta-button">+ Új tétel</button>
             <button id="import-inventory-btn" class="cta-button secondary">📥 Excel import</button>
             <input type="file" id="import-inventory-file" accept=".xlsx,.xls,.csv" hidden />
+            
+            <button id="import-incoming-btn" class="cta-button secondary" data-role="admin">🚚 Úton lévő import</button>
+            <input type="file" id="import-incoming-file" accept=".xlsx,.xls,.csv" hidden />
+            
+            <button id="confirm-incoming-btn" class="cta-button" style="background:#10b981;" data-role="admin">✅ Áru beérkezett</button>
+
             <button id="delete-all-names" class="cta-button danger" data-role="admin">🗑️ Minden törlése</button>
           </div>
         </div>
@@ -57,6 +63,8 @@
             <tr>
               <th>Toll neve</th>
               <th>Raktáron</th>
+              <th data-role="admin">Úton</th>
+              <th data-role="admin">Várható</th>
               <th>Akció</th>
             </tr>
           </thead>

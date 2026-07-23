@@ -750,14 +750,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const tr = document.createElement("tr");
     tr.dataset.id = item.id;
     const stock = item.central_stock ?? 0;
+    const incoming = item.incoming_stock ?? 0;
+    const totalExpected = stock + incoming;
+    
     const classIfNeg = stock < 0 ? 'class="negative-stock"' : '';
+    
     tr.innerHTML = `
       <td>${item.name}</td>
       <td ${classIfNeg}>${stock}</td>
+      <td data-role="admin">${incoming}</td>
+      <td data-role="admin"><strong>${totalExpected}</strong></td>
       <td>
         <button class="edit-btn" aria-label="Szerkesztés">✏️</button>
         <button class="del-btn"  aria-label="Törlés">🗑️</button>
       </td>`;
+      
+    // Re-apply role visibility for the new cells
+    if (currentRole !== 'admin') {
+      tr.querySelectorAll('[data-role="admin"]').forEach(el => el.style.display = 'none');
+    }
+
     tr.querySelector(".edit-btn").addEventListener("pointerup", (e) => { e.preventDefault(); editName(item); });
     tr.querySelector(".del-btn").addEventListener("pointerup",  (e) => { e.preventDefault(); deleteName(item.id); });
     namesTableBody.appendChild(tr);
@@ -779,8 +791,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const newName = prompt("Toll neve:", item.name);
     if (newName === null) return;
     const stock = parseInt(prompt("Raktárkészlet (db):", item.central_stock ?? 0), 10) || 0;
+    const incoming = parseInt(prompt("Úton lévő készlet (db):", item.incoming_stock ?? 0), 10) || 0;
+    
     supabaseClient.from("names")
-      .update({ name: newName, central_stock: stock })
+      .update({ name: newName, central_stock: stock, incoming_stock: incoming })
       .eq("id", item.id)
       .then(({ error }) => { if (error) { alert("Hiba: " + error.message); console.error(error); } else loadAndRenderNames(); });
   }
@@ -876,13 +890,71 @@ document.addEventListener("DOMContentLoaded", () => {
   let sheetHeaders = [];
   let currentStockData = {};
 
+  const importIncomingBtn = document.getElementById("import-incoming-btn");
+  const importIncomingFile = document.getElementById("import-incoming-file");
+
   async function fetchCurrentStockForImport() {
     currentStockData = {};
     const names = await fetchNames();
     names.forEach(n => {
-      currentStockData[n.name.toLowerCase()] = n.central_stock || 0;
+      // Store full object for both central_stock and incoming_stock
+      currentStockData[n.name.toLowerCase()] = n;
     });
   }
+
+  const confirmIncomingBtn = document.getElementById("confirm-incoming-btn");
+  confirmIncomingBtn?.addEventListener("pointerup", async (e) => {
+    e.preventDefault();
+    if (!confirm("Biztosan megérkezett az úton lévő áru?\nEz hozzáadja az úton lévő mennyiségeket a valós raktárkészlethez, majd lenullázza az úton lévőket.")) return;
+
+    confirmIncomingBtn.disabled = true;
+    confirmIncomingBtn.textContent = "⏳ Feldolgozás...";
+
+    try {
+      const names = await fetchNames();
+      const itemsToUpdate = names.filter(n => (n.incoming_stock || 0) > 0);
+
+      if (itemsToUpdate.length === 0) {
+        alert("Nincs úton lévő áru, amit be lehetne fogadni!");
+        confirmIncomingBtn.disabled = false;
+        confirmIncomingBtn.textContent = "✅ Áru beérkezett";
+        return;
+      }
+
+      const updates = itemsToUpdate.map(n => {
+        return {
+          id: n.id,
+          name: n.name,
+          central_stock: (n.central_stock || 0) + n.incoming_stock,
+          incoming_stock: 0
+        };
+      });
+
+      // Update in Supabase
+      const { error } = await supabaseClient.from("names").upsert(updates);
+      if (error) throw error;
+
+      // Log transaction
+      const logItems = itemsToUpdate.map(n => ({ name: n.name, qty: n.incoming_stock }));
+      await supabaseClient.from('transactions').insert({
+        type: 'feltoltes',
+        booth: 'kozponti',
+        user_name: currentUser || currentRole,
+        items: logItems,
+        notes: 'Úton lévő áru beérkezett'
+      });
+
+      alert(`Sikeresen befogadva ${itemsToUpdate.length} féle toll!`);
+      loadAndRenderNames();
+      loadShortageNames(); // Refresh shortage table as well
+      if (currentRole === 'admin') loadAdminLog();
+    } catch (err) {
+      console.error(err);
+      alert("Hiba történt: " + err.message);
+    }
+    confirmIncomingBtn.disabled = false;
+    confirmIncomingBtn.textContent = "✅ Áru beérkezett";
+  });
 
   importInventoryBtn?.addEventListener("pointerup", (e) => {
     e.preventDefault(); importTarget = "names"; importInventoryFile.value = ""; importInventoryFile.click();
@@ -890,9 +962,13 @@ document.addEventListener("DOMContentLoaded", () => {
   importPensBtn?.addEventListener("pointerup", (e) => {
     e.preventDefault(); importTarget = "pens"; importPensFile.value = ""; importPensFile.click();
   });
+  importIncomingBtn?.addEventListener("pointerup", (e) => {
+    e.preventDefault(); importTarget = "incoming"; importIncomingFile.value = ""; importIncomingFile.click();
+  });
 
   importInventoryFile.addEventListener("change", (e) => handleFileSelected(e, "names"));
   importPensFile.addEventListener("change",      (e) => handleFileSelected(e, "pens"));
+  importIncomingFile?.addEventListener("change", (e) => handleFileSelected(e, "incoming"));
 
   function handleFileSelected(event, target) {
     const file = event.target.files[0];
@@ -1047,15 +1123,16 @@ document.addEventListener("DOMContentLoaded", () => {
               }
             }
 
-            if (importTarget === "names") {
+            if (importTarget === "names" || importTarget === "incoming") {
               const mode = document.querySelector('input[name="import_mode"]:checked')?.value || "add";
-              const currentStock = currentStockData[key] || 0;
+              const currentObj = currentStockData[key] || {};
+              const currentStock = importTarget === "names" ? (currentObj.central_stock || 0) : (currentObj.incoming_stock || 0);
 
               if (!hasNumber && mode === "add" && (key in currentStockData)) {
                 // Add módban: ha nincs szám ÉS már létezik → kihagyjuk, nem bántjuk a meglévő készletet
                 if (!seenIdx.has(key)) {
                   seenIdx.set(key, parsedRecords.length);
-                  parsedRecords.push({ name: cellStr, old_stock: currentStock, central_stock: currentStock, _noChange: true });
+                  parsedRecords.push({ name: cellStr, old_stock: currentStock, new_stock: currentStock, _noChange: true });
                 }
               } else {
                 const newStock = hasNumber ? (mode === "add" ? currentStock + s : s) : 0;
@@ -1063,13 +1140,13 @@ document.addEventListener("DOMContentLoaded", () => {
                   // Már láttuk – csak akkor frissítjük, ha most van mellette explicit szám
                   if (hasNumber) {
                     const idx = seenIdx.get(key);
-                    parsedRecords[idx].central_stock = newStock;
+                    parsedRecords[idx].new_stock = newStock;
                     parsedRecords[idx].old_stock = currentStock;
                     delete parsedRecords[idx]._noChange;
                   }
                 } else {
                   seenIdx.set(key, parsedRecords.length);
-                  parsedRecords.push({ name: cellStr, old_stock: currentStock, central_stock: newStock });
+                  parsedRecords.push({ name: cellStr, old_stock: currentStock, new_stock: newStock });
                 }
               }
             } else {
@@ -1088,35 +1165,34 @@ document.addEventListener("DOMContentLoaded", () => {
         const key = name.toLowerCase();
         
         if (name && name.length >= 2) {
-          if (importTarget === "names" && stockColIdx !== "" && stockColIdx !== undefined && stockColIdx !== "auto") {
+          if ((importTarget === "names" || importTarget === "incoming") && stockColIdx !== "" && stockColIdx !== undefined && stockColIdx !== "auto") {
             const rawS = parseInt(row[stockColIdx], 10);
             const hasNumber = !isNaN(rawS);
             const s = hasNumber ? rawS : 0;
             const mode = document.querySelector('input[name="import_mode"]:checked')?.value || "add";
-            const currentStock = currentStockData[key] || 0;
+            const currentObj = currentStockData[key] || {};
+            const currentStock = importTarget === "names" ? (currentObj.central_stock || 0) : (currentObj.incoming_stock || 0);
 
             if (!hasNumber && mode === "add" && (key in currentStockData)) {
-              // Add módban szám nélkül ÉS már létezik → kihagyjuk
               if (!seenIdx.has(key)) {
                 seenIdx.set(key, parsedRecords.length);
-                parsedRecords.push({ name, old_stock: currentStock, central_stock: currentStock, _noChange: true });
+                parsedRecords.push({ name, old_stock: currentStock, new_stock: currentStock, _noChange: true });
               }
             } else {
               const newStock = hasNumber ? (mode === "add" ? currentStock + s : s) : 0;
               if (seenIdx.has(key)) {
                 if (hasNumber) {
                   const idx = seenIdx.get(key);
-                  parsedRecords[idx].central_stock = newStock;
+                  parsedRecords[idx].new_stock = newStock;
                   parsedRecords[idx].old_stock = currentStock;
                   delete parsedRecords[idx]._noChange;
                 }
               } else {
                 seenIdx.set(key, parsedRecords.length);
-                parsedRecords.push({ name, old_stock: currentStock, central_stock: newStock });
+                parsedRecords.push({ name, old_stock: currentStock, new_stock: newStock });
               }
             }
           } else if (!seenIdx.has(key)) {
-            // pens vagy nincs stock oszlop
             const rec = { name };
             if (importTarget === "pens") rec.type = null;
             seenIdx.set(key, parsedRecords.length);
@@ -1126,11 +1202,11 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    const showStock = importTarget === "names" && stockColIdx !== "";
+    const showStock = (importTarget === "names" || importTarget === "incoming") && stockColIdx !== "";
     previewThead.innerHTML = `<tr><th>#</th><th>Toll neve</th>${showStock ? '<th>Készlet (Régi ➔ Új)</th>' : ''}</tr>`;
     
     previewTbody.innerHTML = parsedRecords.slice(0, 10)
-      .map((rec, i) => `<tr><td>${i + 1}</td><td>${rec.name}</td>${showStock ? `<td>${rec.old_stock ?? ''} ➔ <b>${rec.central_stock ?? ''}</b></td>` : ''}</tr>`).join("");
+      .map((rec, i) => `<tr><td>${i + 1}</td><td>${rec.name}</td>${showStock ? `<td>${rec.old_stock ?? ''} ➔ <b>${rec.new_stock ?? ''}</b></td>` : ''}</tr>`).join("");
       
     previewCount.textContent = parsedRecords.length > 0
       ? `Összesen ${parsedRecords.length} egyedi sort találtam${parsedRecords.length > 10 ? " (előnézet: első 10)" : ""}.`
