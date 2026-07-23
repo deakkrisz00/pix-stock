@@ -513,6 +513,35 @@ document.addEventListener("DOMContentLoaded", () => {
   const refreshLogBtn = document.getElementById("refresh-log");
   const adminLogTableBody = document.querySelector("#admin-log-table tbody");
 
+  async function deleteTransaction(rec) {
+    const isConfirmed = confirm(`Biztosan törlöd ezt a tranzakciót (${rec.type})?\nEz visszavonja a készletváltozásokat is!`);
+    if (!isConfirmed) return;
+
+    try {
+      // Ha kivisz vagy visszahoz, akkor visszaállítjuk a készletet
+      if (rec.type === 'kivisz' || rec.type === 'visszahoz') {
+        const items = Array.isArray(rec.items) ? rec.items : [];
+        for (const item of items) {
+          // Kivitel esetén (qty pozitív) -> levonódott a raktárból -> negatívval hívjuk hogy visszategye
+          // Visszahoz esetén (qty pozitív a logban) -> hozzáadódott -> pozitívval hívjuk hogy levegye
+          const reverseQty = rec.type === 'kivisz' ? -Math.abs(item.qty) : Math.abs(item.qty);
+          await updateStock(item.name, rec.booth, reverseQty);
+        }
+      }
+
+      // Törlés az adatbázisból
+      const { error } = await supabaseClient.from('transactions').delete().eq('id', rec.id);
+      if (error) throw error;
+
+      alert("Tranzakció sikeresen törölve, készlet visszaállítva!");
+      loadAdminLog();
+      loadAndRenderNames();
+    } catch (err) {
+      console.error(err);
+      alert("Hiba történt a törlés során: " + err.message);
+    }
+  }
+
   async function loadAdminLog() {
     adminLogTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--color-subtext);">⏳ Betöltés...</td></tr>`;
     const { data, error } = await supabaseClient
@@ -572,9 +601,18 @@ document.addEventListener("DOMContentLoaded", () => {
         <td colspan="5" style="padding: 0;">
           <div class="log-details-content">
             <ul>${itemsHtml}</ul>
+            <div style="margin-top: 1rem; text-align: right;">
+              <button class="cta-button del-transaction-btn" style="background:#ef4444; padding:0.4rem 1rem; font-size:0.85rem;">🗑️ Tranzakció Törlése</button>
+            </div>
           </div>
         </td>
       `;
+
+      const delBtn = detailsTr.querySelector('.del-transaction-btn');
+      delBtn.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        deleteTransaction(rec);
+      });
 
       // Kattintás esemény
       mainTr.addEventListener("pointerup", (e) => {
