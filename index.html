@@ -15,15 +15,26 @@
 <body>
   <header class="app-header">
     <h1>Pix Készletkezelő</h1>
-    <button id="theme-toggle" aria-label="Toggle theme">🌙</button>
+    <div style="display:flex;align-items:center;gap:0.6rem;">
+      <span id="current-user-badge" style="font-size:0.82rem; background:rgba(255,255,255,0.12); padding:0.3rem 0.7rem; border-radius:20px; display:none;"></span>
+      <button id="theme-toggle" aria-label="Toggle theme">🌙</button>
+      <button id="admin-btn" class="cta-button" aria-label="Admin access">🔐 Admin</button>
+    </div>
   </header>
 
   <div class="app-body">
     <nav class="sidebar" id="sidebar">
       <ul>
+        <!-- Admin navigáció -->
         <li data-role="admin" data-section="inventory-section" class="nav-item active">📦 Készlet</li>
+        <li data-role="admin" data-section="shortage-section" class="nav-item">📉 Hiány / Feltöltés</li>
         <li data-role="admin" data-section="pens-section"      class="nav-item">🖊️ Tollak</li>
-        <li data-role="worker" data-section="inventory-section" class="nav-item">📦 Készlet</li>
+        <li data-role="admin" data-section="stats-section"    class="nav-item">📊 Statisztika</li>
+        <li data-role="admin" data-section="admin-log-section" class="nav-item">📋 Napló</li>
+
+        <!-- Worker navigáció -->
+        <li data-role="worker" data-section="inventory-section" class="nav-item active">📦 Készlet</li>
+        <li data-role="worker" data-section="shortage-section" class="nav-item">📉 Hiány / Feltöltés</li>
       </ul>
     </nav>
 
@@ -37,16 +48,14 @@
             <button id="add-item" class="cta-button">+ Új tétel</button>
             <button id="import-inventory-btn" class="cta-button secondary">📥 Excel import</button>
             <input type="file" id="import-inventory-file" accept=".xlsx,.xls,.csv" hidden />
+            <button id="delete-all-names" class="cta-button danger" data-role="admin">🗑️ Minden törlése</button>
           </div>
         </div>
         <table class="glass-table" id="inventory-table">
           <thead>
             <tr>
               <th>Toll neve</th>
-              <th>Központi</th>
-              <th>Bazár</th>
-              <th>Fenti</th>
-              <th>Összesen</th>
+              <th>Raktáron</th>
               <th>Akció</th>
             </tr>
           </thead>
@@ -76,7 +85,82 @@
         </table>
       </section>
 
+      <!-- Shortage Section (Worker & Admin) -->
+      <section id="shortage-section" class="section hidden">
+        <div class="section-header">
+          <h2>Hiány / Feltöltés rögzítése</h2>
+          <div class="section-actions">
+            <select id="booth-select" class="styled-select">
+              <option value="bazar">Bazár</option>
+              <option value="fenti">Krisztián</option>
+            </select>
+          </div>
+        </div>
+        <table class="glass-table" id="shortage-table">
+          <thead>
+            <tr>
+              <th>Toll neve</th>
+              <th>Raktáron</th>
+              <th>Mennyiség (+ hiány, - többlet)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Statisztika szekció (admin) -->
+      <section id="stats-section" class="section hidden">
+        <div class="section-header">
+          <h2>📊 Statisztika</h2>
+          <div class="section-actions">
+            <select id="stats-period" class="styled-select">
+              <option value="7">Utolsó 7 nap</option>
+              <option value="30">Utolsó 30 nap</option>
+              <option value="90">Utolsó 90 nap</option>
+            </select>
+            <button id="refresh-stats" class="cta-button secondary">🔄 Frissít</button>
+          </div>
+        </div>
+        <div id="stats-cards" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-bottom:1.5rem;"></div>
+        <h3 style="margin:0 0 0.8rem; font-size:1rem;">Legutóbbi kiszallítások töllenként</h3>
+        <div style="overflow-x:auto;">
+          <table class="glass-table" id="stats-table">
+            <thead><tr><th>Toll neve</th><th>Kivitt Összesen (db)</th><th>Utoljára</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Admin Log Section -->
+      <section id="admin-log-section" class="section hidden">
+        <div class="section-header">
+          <h2>Admin napló</h2>
+          <div class="section-actions">
+            <button id="refresh-log" class="cta-button secondary">Frissítés</button>
+            <button id="admin-logout" class="cta-button secondary">Kilépés</button>
+          </div>
+        </div>
+        <table class="glass-table" id="admin-log-table">
+          <thead>
+            <tr>
+              <th>Dátum</th>
+              <th>Felhasználó</th>
+              <th>Bódé</th>
+              <th>Típus</th>
+              <th>Toll</th>
+              <th>Mennyiség</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
     </main>
+  </div>
+
+  <!-- Rögzített Összesítés gomb – csak a hiány szekción látható (JS kezeli) -->
+  <div id="shortage-fab" style="position:fixed; bottom:1.5rem; right:1.5rem; z-index:100; display:none;">
+    <button id="submit-shortage" class="cta-button floating-btn">📋 Összesítés</button>
   </div>
 
   <!-- Excel import modal -->
@@ -88,6 +172,21 @@
       </div>
 
       <div class="modal-body">
+        <!-- Import Mód Választó -->
+        <div class="form-row" id="import-mode-row" style="display:none; margin-bottom: 1rem; padding: 0.8rem; background: rgba(99, 102, 241, 0.1); border-radius: 8px;">
+          <label style="margin-bottom: 0.5rem; color: var(--color-text);">Mit szeretnél csinálni a készlettel?</label>
+          <div style="display:flex; flex-direction:column; gap:0.4rem;">
+            <label style="display:flex; align-items:center; gap:0.5rem; font-weight:normal; text-transform:none; color: var(--color-text); cursor:pointer;">
+              <input type="radio" name="import_mode" value="add" checked />
+              Hozzáadás a meglévőhöz (Beérkező áru)
+            </label>
+            <label style="display:flex; align-items:center; gap:0.5rem; font-weight:normal; text-transform:none; color: var(--color-text); cursor:pointer;">
+              <input type="radio" name="import_mode" value="replace" />
+              Készlet felülírása (Kezdő leltár)
+            </label>
+          </div>
+        </div>
+
         <!-- Lapválasztó -->
         <div class="form-row" id="sheet-selector-row">
           <label for="sheet-select">Excel lap (sheet):</label>
@@ -124,6 +223,72 @@
     <p>© 2026 Pix Készletkezelő – verzió 1.0</p>
   </footer>
 
-  <script src="js/app.js"></script>
+    <!-- Shortage Summary Modal -->
+    <div id="summary-modal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width: 680px; width: 95vw;">
+        <div class="modal-header">
+          <div>
+            <h3>Ki kell vinni</h3>
+            <p style="margin:0; font-size:0.82rem; color:var(--color-subtext);" id="summary-booth-label"></p>
+          </div>
+          <button id="summary-close" class="modal-close-btn" aria-label="Bezárás">✕</button>
+        </div>
+        <div class="modal-body" style="padding: 0;">
+          <div style="overflow-x:auto;">
+            <table class="glass-table" id="summary-table" style="margin:0; border-radius:0;">
+              <thead>
+                <tr>
+                  <th>Toll neve</th>
+                  <th>Kivitel (db)</th>
+                  <th>Raktáron van</th>
+                  <th>Raktáron kellene</th>
+                </tr>
+              </thead>
+              <tbody id="summary-list"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="summary-cancel" class="cta-button secondary">Mégse</button>
+          <button id="summary-confirm" class="cta-button">✅ Mentés az adatbázisba</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin PIN Modal -->
+    <div id="admin-pin-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>Admin PIN</h3>
+          <button id="admin-pin-close" class="modal-close-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label for="admin-pin-input">PIN kód:</label>
+            <input type="password" id="admin-pin-input" class="styled-input" maxlength="6" placeholder="6 jegyű PIN" style="text-align:center; font-size:1.2rem; letter-spacing:0.2em;" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="admin-pin-cancel" class="cta-button secondary">Mégse</button>
+          <button id="admin-pin-submit" class="cta-button">Belépés</button>
+        </div>
+      </div>
+    </div>
+    <!-- Felhasználóválasztó Modal – oldal betöltésekor jelenik meg -->
+    <div id="user-select-modal" class="modal-overlay">
+      <div class="modal-box" style="max-width:360px; text-align:center;">
+        <div class="modal-header" style="justify-content:center; border:none;">
+          <h3 style="margin:0;">👋 Ki vagy?</h3>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:0.8rem; align-items:stretch;">
+          <button class="cta-button user-select-btn" data-user="Tamás" style="font-size:1.1rem; padding:0.9rem;">🧑 Tamás</button>
+          <button class="cta-button user-select-btn" data-user="Szabi" style="font-size:1.1rem; padding:0.9rem;">🧑 Szabi</button>
+          <hr style="border-color:var(--color-border); margin:0.3rem 0;" />
+          <button id="user-select-admin" class="cta-button secondary" style="font-size:0.95rem;">🔐 Admin belépés</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="js/app.js"></script>
 </body>
 </html>

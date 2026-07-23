@@ -1,4 +1,4 @@
-﻿INSERT INTO public.names (name) VALUES
+INSERT INTO public.names (name) VALUES
   ('Adela'),
   ('Adelina'),
   ('Adi'),
@@ -262,4 +262,5 @@
   ('Viorel'),
   ('Viorica'),
   ('Vlad'),
-  ('Vlăduț');
+  ('Vlăduț')
+ON CONFLICT (name) DO NOTHING;
