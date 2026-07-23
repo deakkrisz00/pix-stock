@@ -466,21 +466,35 @@ document.addEventListener("DOMContentLoaded", () => {
     summaryConfirm.disabled = true;
     summaryConfirm.textContent = "⏳ Mentés...";
 
+    const kiviszItems = [];
+    const visszahozItems = [];
+
     for (const update of pendingShortageUpdates) {
       const { name, qty } = update;
+      if (qty > 0) kiviszItems.push({ name, qty: Math.abs(qty) });
+      else if (qty < 0) visszahozItems.push({ name, qty: Math.abs(qty) });
       
-      // Record transaction with correct type values
-      const txType = qty > 0 ? 'kivisz' : 'visszahoz';
-      const boothVal = selectedBooth; // 'bazar' or 'fenti' – both valid
+      await updateStock(name, selectedBooth, qty);
+    }
+
+    if (kiviszItems.length > 0) {
       await supabaseClient.from('transactions').insert({
-        type: txType,
-        booth: boothVal,
+        type: 'kivisz',
+        booth: selectedBooth,
         user_name: currentUser || currentRole,
-        items: [{ name, qty: Math.abs(qty) }],
+        items: kiviszItems,
         notes: ''
       });
+    }
 
-      await updateStock(name, selectedBooth, qty);
+    if (visszahozItems.length > 0) {
+      await supabaseClient.from('transactions').insert({
+        type: 'visszahoz',
+        booth: selectedBooth,
+        user_name: currentUser || currentRole,
+        items: visszahozItems,
+        notes: ''
+      });
     }
     
     summaryConfirm.disabled = false;
