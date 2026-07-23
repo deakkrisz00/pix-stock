@@ -29,6 +29,7 @@
         <li data-role="admin" data-section="inventory-section" class="nav-item active">📦 Készlet</li>
         <li data-role="admin" data-section="shortage-section" class="nav-item">📉 Hiány / Feltöltés</li>
         <li data-role="admin" data-section="pens-section"      class="nav-item">🖊️ Tollak</li>
+        <li data-role="admin" data-section="order-section"     class="nav-item">🛒 Rendelés</li>
         <li data-role="admin" data-section="stats-section"    class="nav-item">📊 Statisztika</li>
         <li data-role="admin" data-section="admin-log-section" class="nav-item">📋 Napló</li>
 
@@ -108,6 +109,26 @@
         </table>
       </section>
 
+      <!-- Rendelés szekció (Admin only) -->
+      <section id="order-section" class="section hidden" data-role="admin">
+        <div class="section-header">
+          <h2>Rendelés Export</h2>
+          <div class="section-actions">
+            <button id="export-order-btn" class="cta-button">📥 Excel Export</button>
+          </div>
+        </div>
+        <table class="glass-table" id="order-table">
+          <thead>
+            <tr>
+              <th>Toll neve</th>
+              <th>Raktáron</th>
+              <th>Rendelt Mennyiség</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
       <!-- Statisztika szekció (admin) -->
       <section id="stats-section" class="section hidden">
         <div class="section-header">
@@ -145,10 +166,9 @@
             <tr>
               <th>Dátum</th>
               <th>Felhasználó</th>
-              <th>Bódé</th>
+              <th>Bódé / Cél</th>
               <th>Típus</th>
-              <th>Toll</th>
-              <th>Mennyiség</th>
+              <th>Összesen</th>
             </tr>
           </thead>
           <tbody></tbody>

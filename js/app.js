@@ -62,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
     applyRoleVisibility();
     loadAndRenderNames();
     loadShortageNames();
+    loadOrderNames();
   }
 
   document.querySelectorAll(".user-select-btn").forEach(btn => {
@@ -236,6 +237,170 @@ document.addEventListener("DOMContentLoaded", () => {
 
   boothSelect?.addEventListener("change", loadShortageNames);
 
+  // ── ORDER SECTION LOGIKA (Admin only) ────────────────────────
+  const orderTableBody = document.querySelector("#order-table tbody");
+  const exportOrderBtn = document.getElementById("export-order-btn");
+
+  async function loadOrderNames() {
+    const names = await fetchNames();
+    if (!orderTableBody) return;
+    orderTableBody.innerHTML = "";
+    names.forEach(item => {
+      const tr = document.createElement("tr");
+      tr.dataset.name = item.name;
+      tr.innerHTML = `
+        <td>${item.name}</td>
+        <td>${item.central_stock || 0}</td>
+        <td>
+          <div class="qty-wrap">
+            <div class="qty-quick-btns">
+              <button class="qty-quick-btn" data-add="1" aria-label="+1">+1</button>
+              <button class="qty-quick-btn" data-add="2" aria-label="+2">+2</button>
+              <button class="qty-quick-btn" data-add="3" aria-label="+3">+3</button>
+              <button class="qty-quick-btn" data-add="5" aria-label="+5">+5</button>
+              <button class="qty-quick-btn qty-reset" data-reset="1" aria-label="Törlés">✕</button>
+            </div>
+            <div class="qty-control">
+              <button class="qty-btn" aria-label="Kivonás">−</button>
+              <input type="number" class="styled-input order-qty-input" value="0" min="-9999" max="9999"
+                style="width:64px; text-align:center; padding:0.4rem 0.2rem;" />
+              <button class="qty-btn" aria-label="Hozzáadás">+</button>
+            </div>
+          </div>
+        </td>
+      `;
+
+      const input = tr.querySelector(".order-qty-input");
+
+      function updateInputStyle() {
+        const v = parseInt(input.value, 10) || 0;
+        input.classList.toggle("qty-input-active", v !== 0);
+      }
+
+      tr.querySelectorAll(".qty-quick-btn[data-add]").forEach(btn => {
+        btn.addEventListener("pointerup", e => {
+          e.preventDefault();
+          const add = parseInt(btn.dataset.add, 10);
+          input.value = (parseInt(input.value, 10) || 0) + add;
+          updateInputStyle();
+        });
+      });
+
+      tr.querySelector(".qty-quick-btn[data-reset]")?.addEventListener("pointerup", e => {
+        e.preventDefault();
+        input.value = 0;
+        updateInputStyle();
+      });
+
+      const [minusBtn, plusBtn] = tr.querySelectorAll(".qty-btn");
+      minusBtn.addEventListener("pointerup", e => {
+        e.preventDefault();
+        input.value = (parseInt(input.value, 10) || 0) - 1;
+        updateInputStyle();
+      });
+      plusBtn.addEventListener("pointerup", e => {
+        e.preventDefault();
+        input.value = (parseInt(input.value, 10) || 0) + 1;
+        updateInputStyle();
+      });
+
+      input.addEventListener("input", updateInputStyle);
+
+      orderTableBody.appendChild(tr);
+    });
+  }
+
+  exportOrderBtn?.addEventListener("pointerup", async (e) => {
+    e.preventDefault();
+    if (typeof XLSX === "undefined") {
+      alert("A SheetJS még töltődik be, kérlek várj...");
+      return;
+    }
+
+    const rows = orderTableBody.querySelectorAll("tr");
+    const dataList = [];
+    const orderedItems = []; // Ezt mentjük az adatbázisba
+    
+    // Szűrés és összeszedés
+    for (const row of rows) {
+      const name = row.dataset.name;
+      const qtyStr = row.querySelector('.order-qty-input').value;
+      const qty = parseInt(qtyStr, 10) || 0;
+      dataList.push({ name, orderStr: qty === 0 ? "" : String(qty) });
+      if (qty > 0) {
+        orderedItems.push({ name, qty });
+      }
+    }
+
+    if (orderedItems.length === 0) {
+      alert("Nincs mit exportálni! Kérlek adj meg legalább egy rendelési mennyiséget.");
+      return;
+    }
+
+    // Mátrix generálás (30 sor / oszlop páros)
+    const ROWS_PER_COL = 30;
+    const matrix = [];
+    
+    // Először legeneráljuk a 30 üres sort
+    for (let i = 0; i < ROWS_PER_COL; i++) {
+      matrix.push([]);
+    }
+
+    // Beletöltjük az adatokat oszloponként
+    for (let i = 0; i < dataList.length; i++) {
+      const rowIdx = i % ROWS_PER_COL;
+      const colGroupIdx = Math.floor(i / ROWS_PER_COL);
+      
+      const item = dataList[i];
+      
+      // Padolni kell a sort, ha még nincs elég oszlop benne
+      while (matrix[rowIdx].length < colGroupIdx * 2) {
+        matrix[rowIdx].push("");
+      }
+      
+      matrix[rowIdx].push(item.name);
+      matrix[rowIdx].push(item.orderStr);
+    }
+
+    // Worksheet létrehozás (fejléc nélkül)
+    const ws = XLSX.utils.aoa_to_sheet(matrix);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Rendelés");
+    
+    // Fájl mentés
+    const dateStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `Rendeles_Export_${dateStr}.xlsx`);
+
+    // ── ADATBÁZIS MENTÉS ───────────────────────────────────────
+    try {
+      const { error: logErr } = await supabaseClient
+        .from('transactions')
+        .insert([{
+          type: 'rendeles',
+          booth: 'admin',
+          user_name: currentUser || 'Admin',
+          items: orderedItems
+        }]);
+
+      if (logErr) {
+        console.error("Hiba a rendelés mentésekor:", logErr);
+      } else {
+        // Töröljük a beírt adatokat a sikeres export után
+        rows.forEach(row => {
+          const input = row.querySelector('.order-qty-input');
+          if (input) {
+            input.value = 0;
+            input.classList.remove('qty-input-active');
+          }
+        });
+        loadAdminLog(); // frissítsük a naplót a háttérben
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+
   // Summary Modal Elements
   const summaryModal = document.getElementById("summary-modal");
   const summaryList = document.getElementById("summary-list");
@@ -335,38 +500,81 @@ document.addEventListener("DOMContentLoaded", () => {
   const adminLogTableBody = document.querySelector("#admin-log-table tbody");
 
   async function loadAdminLog() {
-    adminLogTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--color-subtext);">⏳ Betöltés...</td></tr>`;
+    adminLogTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--color-subtext);">⏳ Betöltés...</td></tr>`;
     const { data, error } = await supabaseClient
       .from('transactions')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) {
-      adminLogTableBody.innerHTML = `<tr><td colspan="6" style="color:#f87171;">Hiba: ${error.message}</td></tr>`;
+      adminLogTableBody.innerHTML = `<tr><td colspan="5" style="color:#f87171;">Hiba: ${error.message}</td></tr>`;
       console.error(error);
       return;
     }
     adminLogTableBody.innerHTML = "";
     if (!data || data.length === 0) {
-      adminLogTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--color-subtext);">Nincs bejegyzés</td></tr>`;
+      adminLogTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--color-subtext);">Nincs bejegyzés</td></tr>`;
       return;
     }
     data.forEach(rec => {
-      const typeLabel = rec.type === 'kivisz' ? '⬆️ Kivitt' : rec.type === 'visszahoz' ? '⬇️ Visszahozott' : rec.type;
-      const boothLabel = rec.booth === 'bazar' ? 'Bazár' : rec.booth === 'fenti' ? 'Krisztián' : rec.booth;
+      let typeLabel = rec.type;
+      if (rec.type === 'kivisz') typeLabel = '⬆️ Kivitt';
+      else if (rec.type === 'visszahoz') typeLabel = '⬇️ Visszahozott';
+      else if (rec.type === 'rendeles') typeLabel = '🛒 Rendelés';
+
+      let boothLabel = rec.booth;
+      if (rec.booth === 'bazar') boothLabel = 'Bazár';
+      else if (rec.booth === 'fenti') boothLabel = 'Krisztián';
+      else if (rec.booth === 'admin') boothLabel = 'Export';
+      else if (!boothLabel) boothLabel = '–';
+
       const items = Array.isArray(rec.items) ? rec.items : [];
-      items.forEach(item => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${new Date(rec.created_at).toLocaleString('hu-HU')}</td>
-          <td>${rec.user_name || '–'}</td>
-          <td>${boothLabel}</td>
-          <td>${typeLabel}</td>
-          <td>${item.name}</td>
-          <td><strong>${item.qty} db</strong></td>
-        `;
-        adminLogTableBody.appendChild(tr);
+      const totalItems = items.reduce((sum, item) => sum + Math.abs(item.qty), 0);
+      const uniqueItems = items.length;
+
+      // Fő sor (kattintható)
+      const mainTr = document.createElement('tr');
+      mainTr.className = 'log-main-row';
+      mainTr.innerHTML = `
+        <td>${new Date(rec.created_at).toLocaleString('hu-HU')}</td>
+        <td>${rec.user_name || '–'}</td>
+        <td>${boothLabel}</td>
+        <td>${typeLabel}</td>
+        <td><strong>${totalItems} db</strong> (${uniqueItems} fajta) <span style="float:right; font-size:0.8rem;">▼</span></td>
+      `;
+
+      // Részletek sor (rejtett)
+      const detailsTr = document.createElement('tr');
+      detailsTr.className = 'log-details-row';
+      
+      const itemsHtml = items.map(item => `
+        <li>
+          <span>${item.name}</span>
+          <span class="log-qty-badge">${item.qty} db</span>
+        </li>
+      `).join('');
+
+      detailsTr.innerHTML = `
+        <td colspan="5" style="padding: 0;">
+          <div class="log-details-content">
+            <ul>${itemsHtml}</ul>
+          </div>
+        </td>
+      `;
+
+      // Kattintás esemény
+      mainTr.addEventListener("pointerup", (e) => {
+        e.preventDefault();
+        const isOpen = detailsTr.classList.contains("open");
+        // Bezárunk minden mást (opcionális, de átláthatóbb)
+        document.querySelectorAll('.log-details-row.open').forEach(row => row.classList.remove('open'));
+        if (!isOpen) {
+          detailsTr.classList.add("open");
+        }
       });
+
+      adminLogTableBody.appendChild(mainTr);
+      adminLogTableBody.appendChild(detailsTr);
     });
   }
 
@@ -939,6 +1147,7 @@ document.addEventListener("DOMContentLoaded", () => {
     realtimeTimer = setTimeout(() => {
       loadAndRenderNames();
       loadShortageNames();
+      loadOrderNames();
     }, 300);
   }
 
@@ -959,6 +1168,7 @@ document.addEventListener("DOMContentLoaded", () => {
       applyRoleVisibility();
       loadAndRenderNames();
       loadShortageNames();
+      loadOrderNames();
     }
     subscribeRealtime();
   }
