@@ -846,25 +846,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const tr = document.createElement("tr");
     tr.dataset.id = item.id;
     const stock = item.central_stock ?? 0;
-    const incoming = item.incoming_stock ?? 0;
-    const totalExpected = stock + incoming;
     
     const classIfNeg = stock < 0 ? 'class="negative-stock"' : '';
     
     tr.innerHTML = `
       <td>${item.name}</td>
       <td ${classIfNeg}>${stock}</td>
-      <td data-role="admin">${incoming}</td>
-      <td data-role="admin"><strong>${totalExpected}</strong></td>
       <td>
         <button class="edit-btn" aria-label="Szerkesztés">✏️</button>
         <button class="del-btn"  aria-label="Törlés">🗑️</button>
       </td>`;
-      
-    // Re-apply role visibility for the new cells
-    if (currentRole !== 'admin') {
-      tr.querySelectorAll('[data-role="admin"]').forEach(el => el.style.display = 'none');
-    }
 
     tr.querySelector(".edit-btn").addEventListener("pointerup", (e) => { e.preventDefault(); editName(item); });
     tr.querySelector(".del-btn").addEventListener("pointerup",  (e) => { e.preventDefault(); deleteName(item.id); });
@@ -883,16 +874,59 @@ document.addEventListener("DOMContentLoaded", () => {
       .then(({ error }) => { if (error) console.error(error); else loadAndRenderNames(); });
   }
 
+  const editModal = document.getElementById("edit-item-modal");
+  const editIdInput = document.getElementById("edit-item-id");
+  const editNameInput = document.getElementById("edit-item-name");
+  const editCentralInput = document.getElementById("edit-item-central");
+  const editBazarInput = document.getElementById("edit-item-bazar");
+  const editFentiInput = document.getElementById("edit-item-fenti");
+
+  document.getElementById("edit-item-close")?.addEventListener("pointerup", closeEditModal);
+  document.getElementById("edit-item-cancel")?.addEventListener("pointerup", closeEditModal);
+  document.getElementById("edit-item-save")?.addEventListener("pointerup", saveEditItem);
+
+  function closeEditModal() {
+    editModal.classList.add("hidden");
+  }
+
   function editName(item) {
-    const newName = prompt("Toll neve:", item.name);
-    if (newName === null) return;
-    const stock = parseInt(prompt("Raktárkészlet (db):", item.central_stock ?? 0), 10) || 0;
-    const incoming = parseInt(prompt("Úton lévő készlet (db):", item.incoming_stock ?? 0), 10) || 0;
+    editIdInput.value = item.id;
+    editNameInput.value = item.name || "";
+    editCentralInput.value = item.central_stock || 0;
+    editBazarInput.value = item.bazar_stock || 0;
+    editFentiInput.value = item.fenti_stock || 0;
     
-    supabaseClient.from("names")
-      .update({ name: newName, central_stock: stock, incoming_stock: incoming })
-      .eq("id", item.id)
-      .then(({ error }) => { if (error) { alert("Hiba: " + error.message); console.error(error); } else loadAndRenderNames(); });
+    editModal.classList.remove("hidden");
+  }
+
+  async function saveEditItem(e) {
+    e.preventDefault();
+    const id = editIdInput.value;
+    if (!id) return;
+
+    const newName = editNameInput.value.trim();
+    if (!newName) { alert("A név nem lehet üres!"); return; }
+
+    const stock = parseInt(editCentralInput.value, 10) || 0;
+    const bazar = parseInt(editBazarInput.value, 10) || 0;
+    const fenti = parseInt(editFentiInput.value, 10) || 0;
+
+    const { error } = await supabaseClient.from("names")
+      .update({ 
+        name: newName, 
+        central_stock: stock, 
+        bazar_stock: bazar,
+        fenti_stock: fenti
+      })
+      .eq("id", id);
+
+    if (error) {
+      alert("Hiba: " + error.message);
+      console.error(error);
+    } else {
+      closeEditModal();
+      loadAndRenderNames();
+    }
   }
 
   function deleteName(id) {
@@ -998,59 +1032,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const confirmIncomingBtn = document.getElementById("confirm-incoming-btn");
-  confirmIncomingBtn?.addEventListener("pointerup", async (e) => {
-    e.preventDefault();
-    if (!confirm("Biztosan megérkezett az úton lévő áru?\nEz hozzáadja az úton lévő mennyiségeket a valós raktárkészlethez, majd lenullázza az úton lévőket.")) return;
 
-    confirmIncomingBtn.disabled = true;
-    confirmIncomingBtn.textContent = "⏳ Feldolgozás...";
-
-    try {
-      const names = await fetchNames();
-      const itemsToUpdate = names.filter(n => (n.incoming_stock || 0) > 0);
-
-      if (itemsToUpdate.length === 0) {
-        alert("Nincs úton lévő áru, amit be lehetne fogadni!");
-        confirmIncomingBtn.disabled = false;
-        confirmIncomingBtn.textContent = "✅ Áru beérkezett";
-        return;
-      }
-
-      const updates = itemsToUpdate.map(n => {
-        return {
-          id: n.id,
-          name: n.name,
-          central_stock: (n.central_stock || 0) + n.incoming_stock,
-          incoming_stock: 0
-        };
-      });
-
-      // Update in Supabase
-      const { error } = await supabaseClient.from("names").upsert(updates);
-      if (error) throw error;
-
-      // Log transaction
-      const logItems = itemsToUpdate.map(n => ({ name: n.name, qty: n.incoming_stock }));
-      await supabaseClient.from('transactions').insert({
-        type: 'feltoltes',
-        booth: 'kozponti',
-        user_name: currentUser || currentRole,
-        items: logItems,
-        notes: 'Úton lévő áru beérkezett'
-      });
-
-      alert(`Sikeresen befogadva ${itemsToUpdate.length} féle toll!`);
-      loadAndRenderNames();
-      loadShortageNames(); // Refresh shortage table as well
-      if (currentRole === 'admin') loadAdminLog();
-    } catch (err) {
-      console.error(err);
-      alert("Hiba történt: " + err.message);
-    }
-    confirmIncomingBtn.disabled = false;
-    confirmIncomingBtn.textContent = "✅ Áru beérkezett";
-  });
 
   importInventoryBtn?.addEventListener("pointerup", (e) => {
     e.preventDefault(); importTarget = "names"; importInventoryFile.value = ""; importInventoryFile.click();
@@ -1058,13 +1040,11 @@ document.addEventListener("DOMContentLoaded", () => {
   importPensBtn?.addEventListener("pointerup", (e) => {
     e.preventDefault(); importTarget = "pens"; importPensFile.value = ""; importPensFile.click();
   });
-  importIncomingBtn?.addEventListener("pointerup", (e) => {
-    e.preventDefault(); importTarget = "incoming"; importIncomingFile.value = ""; importIncomingFile.click();
-  });
+
 
   importInventoryFile.addEventListener("change", (e) => handleFileSelected(e, "names"));
   importPensFile.addEventListener("change",      (e) => handleFileSelected(e, "pens"));
-  importIncomingFile?.addEventListener("change", (e) => handleFileSelected(e, "incoming"));
+
 
   function handleFileSelected(event, target) {
     const file = event.target.files[0];

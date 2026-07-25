@@ -50,11 +50,6 @@
             <button id="import-inventory-btn" class="cta-button secondary">📥 Excel import</button>
             <input type="file" id="import-inventory-file" accept=".xlsx,.xls,.csv" hidden />
             
-            <button id="import-incoming-btn" class="cta-button secondary" data-role="admin">🚚 Úton lévő import</button>
-            <input type="file" id="import-incoming-file" accept=".xlsx,.xls,.csv" hidden />
-            
-            <button id="confirm-incoming-btn" class="cta-button" style="background:#10b981;" data-role="admin">✅ Áru beérkezett</button>
-
             <button id="delete-all-names" class="cta-button danger" data-role="admin">🗑️ Minden törlése</button>
           </div>
         </div>
@@ -63,8 +58,6 @@
             <tr>
               <th>Toll neve</th>
               <th>Raktáron</th>
-              <th data-role="admin">Úton</th>
-              <th data-role="admin">Várható</th>
               <th>Akció</th>
             </tr>
           </thead>
@@ -281,6 +274,40 @@
         <div class="modal-footer">
           <button id="summary-cancel" class="cta-button secondary">Mégse</button>
           <button id="summary-confirm" class="cta-button">✅ Mentés az adatbázisba</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Item Modal -->
+    <div id="edit-item-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>Tétel szerkesztése</h3>
+          <button id="edit-item-close" class="modal-close-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="edit-item-id" />
+          <div class="form-row">
+            <label for="edit-item-name">Név:</label>
+            <input type="text" id="edit-item-name" class="styled-input" />
+          </div>
+          <div class="form-row">
+            <label for="edit-item-central">Raktárkészlet (db):</label>
+            <input type="number" id="edit-item-central" class="styled-input" />
+          </div>
+
+          <div class="form-row">
+            <label for="edit-item-bazar">Bazár függő hiány (db):</label>
+            <input type="number" id="edit-item-bazar" class="styled-input" />
+          </div>
+          <div class="form-row">
+            <label for="edit-item-fenti">Krisztián függő hiány (db):</label>
+            <input type="number" id="edit-item-fenti" class="styled-input" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="edit-item-cancel" class="cta-button secondary">Mégse</button>
+          <button id="edit-item-save" class="cta-button">Mentés</button>
         </div>
       </div>
     </div>
