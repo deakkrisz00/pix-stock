@@ -1368,6 +1368,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const copy = { ...r };
         delete copy.old_stock;  // Ideiglenes UI prop
         delete copy._noChange;  // Ideiglenes jelölő
+        if (copy.new_stock !== undefined) {
+          copy.central_stock = copy.new_stock;
+          delete copy.new_stock;
+        }
         return copy;
       });
 
