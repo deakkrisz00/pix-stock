@@ -39,9 +39,12 @@
     </nav>
 
     <main class="content" id="main-content">
-      <!-- Kereső Sáv -->
-      <div class="global-search-container" style="margin-bottom: 1.5rem;">
-        <input type="text" id="global-search-input" class="styled-input" placeholder="🔍 Toll keresése..." style="width: 100%; max-width: 400px; padding: 0.8rem; font-size: 1.1rem; border-radius: 10px;" />
+      <!-- Floating Search Bar -->
+      <div id="floating-search-container" class="floating-search-container">
+        <input type="text" id="global-search-input" class="styled-input floating-search-input" placeholder="🔍 Toll keresése..." />
+        <button id="floating-search-btn" class="floating-search-btn" aria-label="Keresés">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
       </div>
 
       <!-- Készlet szekció -->
@@ -61,8 +64,7 @@
             <tr>
               <th>Toll neve</th>
               <th>Raktáron</th>
-              <th>Bazár hiány</th>
-              <th>Krisztián hiány</th>
+              <th>Bazár / Krisztián hiány</th>
               <th>Akció</th>
             </tr>
           </thead>
@@ -106,9 +108,8 @@
         <table class="glass-table" id="shortage-table">
           <thead>
             <tr>
-              <th>Toll neve</th>
+              <th>Toll neve & Hiány</th>
               <th>Raktáron</th>
-              <th>Bódékból hiányzik</th>
               <th>Új hiány felírása</th>
             </tr>
           </thead>
@@ -129,9 +130,7 @@
             <tr>
               <th>Toll neve</th>
               <th>Raktáron</th>
-              <th>Bazár hiány</th>
-              <th>Krisztián hiány</th>
-              <th>Rendelt Mennyiség</th>
+              <th>Rendelés mennyisége</th>
             </tr>
           </thead>
           <tbody></tbody>

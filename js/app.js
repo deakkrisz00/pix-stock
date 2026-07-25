@@ -196,6 +196,22 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   globalSearchInput?.addEventListener("input", applyGlobalSearchFilter);
+  
+  const floatingSearchBtn = document.getElementById("floating-search-btn");
+  const floatingSearchContainer = document.getElementById("floating-search-container");
+  
+  floatingSearchBtn?.addEventListener("pointerup", (e) => {
+    e.preventDefault();
+    floatingSearchContainer.classList.toggle("active");
+    if (floatingSearchContainer.classList.contains("active")) {
+      setTimeout(() => globalSearchInput.focus(), 100);
+    } else {
+      if (globalSearchInput.value !== "") {
+        globalSearchInput.value = "";
+        applyGlobalSearchFilter();
+      }
+    }
+  });
 
   // ── SHORTAGE SECTION LOGIKA ───────────────────────────────────
   const boothSelect = document.getElementById("booth-select");
@@ -234,26 +250,27 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (stock < 0) stockStyle = 'class="negative-stock"';
 
       tr.innerHTML = `
-        <td>${item.name}</td>
-        <td ${stockStyle}>${stock}</td>
-        <td data-label="${currentBooth === 'bazar' ? 'Bazár hiányzik' : 'Krisztián hiányzik'}">
-          <span style="font-weight: bold; color: ${pendingShortage > 0 ? '#f87171' : 'var(--color-text)'}">${pendingShortage} db</span>
-          ${fulfillBtnHtml}
-        </td>
         <td>
-          <div class="qty-wrap">
-            <div class="qty-quick-btns">
+          <div style="font-weight: bold; font-size: 1.1rem; color: var(--color-accent);">${item.name}</div>
+          <div style="margin-top: 0.4rem; font-size: 0.85rem; color: var(--color-subtext);">
+            Jelenlegi hiány: <span style="font-weight: bold; color: ${pendingShortage > 0 ? '#f87171' : 'var(--color-text)'}">${pendingShortage} db</span>
+            ${fulfillBtnHtml}
+          </div>
+        </td>
+        <td ${stockStyle} style="text-align: center; font-size: 1.1rem;">${stock}</td>
+        <td>
+          <div class="qty-wrap" style="align-items: center; justify-content: center;">
+            <div class="qty-quick-btns" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 100%;">
               <button class="qty-quick-btn" data-add="1" aria-label="+1">+1</button>
               <button class="qty-quick-btn" data-add="2" aria-label="+2">+2</button>
               <button class="qty-quick-btn" data-add="3" aria-label="+3">+3</button>
               <button class="qty-quick-btn" data-add="4" aria-label="+4">+4</button>
               <button class="qty-quick-btn" data-add="5" aria-label="+5">+5</button>
-            </div>
-            <div class="qty-control">
-              <button class="qty-quick-btn" data-add="-1" aria-label="-1" style="padding:0.4rem; font-size:1.1rem;">−</button>
-              <input type="number" class="styled-input shortage-qty-input" value="0" min="-9999" max="9999"
-                style="width:64px; text-align:center; padding:0.4rem 0.2rem;" />
               <button class="qty-quick-btn qty-reset" data-reset="1" aria-label="Törlés" style="padding:0.4rem; font-size:1.1rem;">✕</button>
+            </div>
+            <div class="qty-control" style="margin-top: 4px; width: 100%;">
+              <input type="number" class="styled-input shortage-qty-input" value="0" min="-9999" max="9999"
+                style="width:100%; text-align:center; padding:0.4rem 0.2rem; font-weight: bold; font-size: 1.1rem;" />
             </div>
           </div>
         </td>
@@ -271,7 +288,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.addEventListener("pointerup", e => {
           e.preventDefault();
           const add = parseInt(btn.dataset.add, 10);
-          input.value = (parseInt(input.value, 10) || 0) + add;
+          input.value = add;
           updateInputStyle();
         });
       });
@@ -377,24 +394,27 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (stock < 0) stockStyle = 'class="negative-stock"';
 
       tr.innerHTML = `
-        <td>${item.name}</td>
-        <td ${stockStyle}>${stock}</td>
-        <td style="color:${bazar > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${bazar > 0 ? 'bold' : 'normal'};">${bazar > 0 ? bazar + ' db' : '-'}</td>
-        <td style="color:${fenti > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${fenti > 0 ? 'bold' : 'normal'};">${fenti > 0 ? fenti + ' db' : '-'}</td>
         <td>
-          <div class="qty-wrap">
-            <div class="qty-quick-btns">
+          <div style="font-weight: bold; font-size: 1.1rem; color: var(--color-accent);">${item.name}</div>
+          <div style="margin-top: 0.4rem; font-size: 0.85rem; color: var(--color-subtext);">
+            Bazár: <span style="font-weight:${bazar > 0 ? 'bold' : 'normal'}; color:${bazar > 0 ? '#f87171' : 'inherit'}">${bazar > 0 ? bazar + ' db' : '0 db'}</span> |
+            Krisztián: <span style="font-weight:${fenti > 0 ? 'bold' : 'normal'}; color:${fenti > 0 ? '#f87171' : 'inherit'}">${fenti > 0 ? fenti + ' db' : '0 db'}</span>
+          </div>
+        </td>
+        <td ${stockStyle} style="text-align: center; font-size: 1.1rem;">${stock}</td>
+        <td>
+          <div class="qty-wrap" style="align-items: center; justify-content: center;">
+            <div class="qty-quick-btns" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 100%;">
               <button class="qty-quick-btn" data-add="1" aria-label="+1">+1</button>
               <button class="qty-quick-btn" data-add="2" aria-label="+2">+2</button>
               <button class="qty-quick-btn" data-add="3" aria-label="+3">+3</button>
               <button class="qty-quick-btn" data-add="4" aria-label="+4">+4</button>
               <button class="qty-quick-btn" data-add="5" aria-label="+5">+5</button>
-            </div>
-            <div class="qty-control">
-              <button class="qty-quick-btn" data-add="-1" aria-label="-1" style="padding:0.4rem; font-size:1.1rem;">−</button>
-              <input type="number" class="styled-input order-qty-input" value="0" min="-9999" max="9999"
-                style="width:64px; text-align:center; padding:0.4rem 0.2rem;" />
               <button class="qty-quick-btn qty-reset" data-reset="1" aria-label="Törlés" style="padding:0.4rem; font-size:1.1rem;">✕</button>
+            </div>
+            <div class="qty-control" style="margin-top: 4px; width: 100%;">
+              <input type="number" class="styled-input order-qty-input" value="0" min="-9999" max="9999"
+                style="width:100%; text-align:center; padding:0.4rem 0.2rem; font-weight: bold; font-size: 1.1rem;" />
             </div>
           </div>
         </td>
@@ -411,7 +431,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.addEventListener("pointerup", e => {
           e.preventDefault();
           const add = parseInt(btn.dataset.add, 10);
-          input.value = (parseInt(input.value, 10) || 0) + add;
+          input.value = add;
           updateInputStyle();
         });
       });
@@ -898,8 +918,10 @@ document.addEventListener("DOMContentLoaded", () => {
     tr.innerHTML = `
       <td>${item.name}</td>
       <td ${stockStyle}>${stock}</td>
-      <td style="color:${bazar > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${bazar > 0 ? 'bold' : 'normal'};">${bazar > 0 ? bazar + ' db' : '-'}</td>
-      <td style="color:${fenti > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${fenti > 0 ? 'bold' : 'normal'};">${fenti > 0 ? fenti + ' db' : '-'}</td>
+      <td style="font-size: 0.85rem;">
+        B: <span style="color:${bazar > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${bazar > 0 ? 'bold' : 'normal'};">${bazar > 0 ? bazar : '-'}</span> |
+        K: <span style="color:${fenti > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${fenti > 0 ? 'bold' : 'normal'};">${fenti > 0 ? fenti : '-'}</span>
+      </td>
       <td>
         <button class="edit-btn" aria-label="Szerkesztés">✏️</button>
         <button class="del-btn"  aria-label="Törlés">🗑️</button>
