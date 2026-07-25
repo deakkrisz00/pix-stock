@@ -213,19 +213,19 @@ document.addEventListener("DOMContentLoaded", () => {
           ${fulfillBtnHtml}
         </td>
         <td>
-          <div class="qty-wrap" style="align-items: center; gap: 8px;">
-            <div class="qty-quick-btns" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;">
+          <div class="qty-wrap">
+            <div class="qty-quick-btns">
               <button class="qty-quick-btn" data-add="1" aria-label="+1">+1</button>
               <button class="qty-quick-btn" data-add="2" aria-label="+2">+2</button>
               <button class="qty-quick-btn" data-add="3" aria-label="+3">+3</button>
               <button class="qty-quick-btn" data-add="4" aria-label="+4">+4</button>
               <button class="qty-quick-btn" data-add="5" aria-label="+5">+5</button>
-              <button class="qty-quick-btn" data-add="-1" aria-label="-1">−1</button>
-              <button class="qty-quick-btn qty-reset" data-reset="1" aria-label="Törlés">✕</button>
             </div>
-            <div class="qty-control" style="justify-content: center;">
+            <div class="qty-control">
+              <button class="qty-quick-btn" data-add="-1" aria-label="-1" style="padding:0.4rem; font-size:1.1rem;">−</button>
               <input type="number" class="styled-input shortage-qty-input" value="0" min="-9999" max="9999"
-                style="width:64px; text-align:center; padding:0.4rem; font-weight:bold; font-size:1.1rem;" />
+                style="width:64px; text-align:center; padding:0.4rem 0.2rem;" />
+              <button class="qty-quick-btn qty-reset" data-reset="1" aria-label="Törlés" style="padding:0.4rem; font-size:1.1rem;">✕</button>
             </div>
           </div>
         </td>
@@ -353,19 +353,19 @@ document.addEventListener("DOMContentLoaded", () => {
         <td style="color:${bazar > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${bazar > 0 ? 'bold' : 'normal'};">${bazar > 0 ? bazar + ' db' : '-'}</td>
         <td style="color:${fenti > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${fenti > 0 ? 'bold' : 'normal'};">${fenti > 0 ? fenti + ' db' : '-'}</td>
         <td>
-          <div class="qty-wrap" style="align-items: center; gap: 8px;">
-            <div class="qty-quick-btns" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;">
+          <div class="qty-wrap">
+            <div class="qty-quick-btns">
               <button class="qty-quick-btn" data-add="1" aria-label="+1">+1</button>
               <button class="qty-quick-btn" data-add="2" aria-label="+2">+2</button>
               <button class="qty-quick-btn" data-add="3" aria-label="+3">+3</button>
               <button class="qty-quick-btn" data-add="4" aria-label="+4">+4</button>
               <button class="qty-quick-btn" data-add="5" aria-label="+5">+5</button>
-              <button class="qty-quick-btn" data-add="-1" aria-label="-1">−1</button>
-              <button class="qty-quick-btn qty-reset" data-reset="1" aria-label="Törlés">✕</button>
             </div>
-            <div class="qty-control" style="justify-content: center;">
+            <div class="qty-control">
+              <button class="qty-quick-btn" data-add="-1" aria-label="-1" style="padding:0.4rem; font-size:1.1rem;">−</button>
               <input type="number" class="styled-input order-qty-input" value="0" min="-9999" max="9999"
-                style="width:64px; text-align:center; padding:0.4rem; font-weight:bold; font-size:1.1rem;" />
+                style="width:64px; text-align:center; padding:0.4rem 0.2rem;" />
+              <button class="qty-quick-btn qty-reset" data-reset="1" aria-label="Törlés" style="padding:0.4rem; font-size:1.1rem;">✕</button>
             </div>
           </div>
         </td>
