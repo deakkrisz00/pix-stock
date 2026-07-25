@@ -40,6 +40,10 @@
     </nav>
 
     <main class="content" id="main-content">
+      <!-- Kereső Sáv -->
+      <div class="global-search-container" style="margin-bottom: 1.5rem;">
+        <input type="text" id="global-search-input" class="styled-input" placeholder="🔍 Toll keresése..." style="width: 100%; max-width: 400px; padding: 0.8rem; font-size: 1.1rem; border-radius: 10px;" />
+      </div>
 
       <!-- Készlet szekció -->
       <section id="inventory-section" class="section">
@@ -105,7 +109,7 @@
             <tr>
               <th>Toll neve</th>
               <th>Raktáron</th>
-              <th>Függő Hiány</th>
+              <th>Bódékból hiányzik</th>
               <th>Új hiány felírása</th>
             </tr>
           </thead>
@@ -268,7 +272,7 @@
                   <th>Igényelt</th>
                   <th>Kiadva (Raktárból)</th>
                   <th>Új Raktárkészlet</th>
-                  <th>Új Függő Hiány</th>
+                  <th>Új hiány</th>
                 </tr>
               </thead>
               <tbody id="summary-list"></tbody>
@@ -301,11 +305,11 @@
           </div>
 
           <div class="form-row">
-            <label for="edit-item-bazar">Bazár függő hiány (db):</label>
+            <label for="edit-item-bazar">Bazár hiányzik (db):</label>
             <input type="number" id="edit-item-bazar" class="styled-input" />
           </div>
           <div class="form-row">
-            <label for="edit-item-fenti">Krisztián függő hiány (db):</label>
+            <label for="edit-item-fenti">Krisztián hiányzik (db):</label>
             <input type="number" id="edit-item-fenti" class="styled-input" />
           </div>
         </div>

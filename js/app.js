@@ -175,6 +175,28 @@ document.addEventListener("DOMContentLoaded", () => {
     applyRoleVisibility();
   });
 
+  // ── GLOBAL SEARCH ───────────────────────────────────────────
+  const globalSearchInput = document.getElementById("global-search-input");
+  
+  function applyGlobalSearchFilter() {
+    if (!globalSearchInput) return;
+    const term = globalSearchInput.value.toLowerCase();
+    
+    const tablesToFilter = ["#inventory-table", "#shortage-table", "#pens-table", "#order-table"];
+    tablesToFilter.forEach(tableSelector => {
+      document.querySelectorAll(`${tableSelector} tbody tr`).forEach(tr => {
+        const name = tr.dataset.name?.toLowerCase() || tr.firstElementChild?.textContent.toLowerCase() || "";
+        if (name.includes(term)) {
+          tr.style.display = "";
+        } else {
+          tr.style.display = "none";
+        }
+      });
+    });
+  }
+
+  globalSearchInput?.addEventListener("input", applyGlobalSearchFilter);
+
   // ── SHORTAGE SECTION LOGIKA ───────────────────────────────────
   const boothSelect = document.getElementById("booth-select");
   const shortageTableBody = document.querySelector("#shortage-table tbody");
@@ -276,6 +298,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       shortageTableBody.appendChild(tr);
     });
+    applyGlobalSearchFilter();
   }
 
   async function fulfillBackorder(name, booth, amount) {
@@ -397,6 +420,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       orderTableBody.appendChild(tr);
     });
+    applyGlobalSearchFilter();
   }
 
   exportOrderBtn?.addEventListener("pointerup", async (e) => {
@@ -808,6 +832,7 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
       statsTableBody.appendChild(tr);
     });
+    applyGlobalSearchFilter();
   }
 
   refreshStatsBtn?.addEventListener('pointerup', e => { e.preventDefault(); loadStats(); });
@@ -880,6 +905,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadAndRenderNames() {
     namesTableBody.innerHTML = "";
     (await fetchNames()).forEach(renderNameRow);
+    applyGlobalSearchFilter();
   }
 
   function addName() {
@@ -1002,6 +1028,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadAndRenderPens() {
     pensTableBody.innerHTML = "";
     (await fetchPens()).forEach(renderPenRow);
+    applyGlobalSearchFilter();
   }
 
   function addPen() {
