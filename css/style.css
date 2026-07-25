@@ -499,7 +499,7 @@ body.light-theme .summary-item {
     content: "Raktáron: "; color: var(--color-subtext); font-weight: normal; margin-right: 0.5rem;
   }
   #shortage-table td:nth-child(3)::before {
-    content: "Bódékból hiányzik: "; color: var(--color-subtext); font-weight: normal; margin-right: 0.5rem;
+    content: attr(data-label) ": "; color: var(--color-subtext); font-weight: normal; margin-right: 0.5rem;
   }
   #order-table td:nth-child(3)::before, #names-table td:nth-child(3)::before {
     content: "Bazár hiány: "; color: var(--color-subtext); margin-right: 0.5rem;

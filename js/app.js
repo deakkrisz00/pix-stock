@@ -207,6 +207,12 @@ document.addEventListener("DOMContentLoaded", () => {
     shortageTableBody.innerHTML = "";
     const currentBooth = boothSelect ? boothSelect.value : 'bazar';
     const boothField = currentBooth === 'bazar' ? 'bazar_stock' : 'fenti_stock';
+    
+    // Update table header to explicitly show which booth we are looking at
+    const shortageHeader = document.querySelector("#shortage-table th:nth-child(3)");
+    if (shortageHeader) {
+      shortageHeader.textContent = currentBooth === 'bazar' ? 'Bazár hiányzik' : 'Krisztián hiányzik';
+    }
 
     names.forEach(item => {
       const tr = document.createElement("tr");
@@ -230,7 +236,7 @@ document.addEventListener("DOMContentLoaded", () => {
       tr.innerHTML = `
         <td>${item.name}</td>
         <td ${stockStyle}>${stock}</td>
-        <td>
+        <td data-label="${currentBooth === 'bazar' ? 'Bazár hiányzik' : 'Krisztián hiányzik'}">
           <span style="font-weight: bold; color: ${pendingShortage > 0 ? '#f87171' : 'var(--color-text)'}">${pendingShortage} db</span>
           ${fulfillBtnHtml}
         </td>
