@@ -58,6 +58,8 @@
             <tr>
               <th>Toll neve</th>
               <th>Raktáron</th>
+              <th>Bazár hiány</th>
+              <th>Krisztián hiány</th>
               <th>Akció</th>
             </tr>
           </thead>
@@ -124,6 +126,8 @@
             <tr>
               <th>Toll neve</th>
               <th>Raktáron</th>
+              <th>Bazár hiány</th>
+              <th>Krisztián hiány</th>
               <th>Rendelt Mennyiség</th>
             </tr>
           </thead>
@@ -331,6 +335,22 @@
         </div>
       </div>
     </div>
+    <!-- Bódé Választó Modal (Hiány felírásakor) -->
+    <div id="booth-prompt-modal" class="modal-overlay hidden" style="z-index: 9999;">
+      <div class="modal-box" style="max-width: 360px; text-align: center;">
+        <div class="modal-header" style="justify-content: center; border: none;">
+          <h3 style="margin:0;">Melyik bódéba viszed?</h3>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+          <button class="cta-button booth-prompt-btn" data-booth="bazar" style="font-size: 1.1rem; padding: 1rem;">Bazár</button>
+          <button class="cta-button booth-prompt-btn" data-booth="fenti" style="font-size: 1.1rem; padding: 1rem;">Krisztián</button>
+        </div>
+        <div class="modal-footer" style="justify-content: center;">
+          <button id="booth-prompt-cancel" class="cta-button secondary">Mégse</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Felhasználóválasztó Modal – oldal betöltésekor jelenik meg -->
     <div id="user-select-modal" class="modal-overlay">
       <div class="modal-box" style="max-width:360px; text-align:center;">

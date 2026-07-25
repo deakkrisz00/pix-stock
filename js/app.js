@@ -91,8 +91,28 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       navItems.forEach(n => n.classList.remove("active"));
       item.classList.add("active");
-      if (item.dataset.section) showSection(item.dataset.section);
+      if (item.dataset.section) {
+        if (item.dataset.section === "shortage-section") {
+          document.getElementById("booth-prompt-modal")?.classList.remove("hidden");
+        }
+        showSection(item.dataset.section);
+      }
     });
+  });
+
+  document.querySelectorAll(".booth-prompt-btn").forEach(btn => {
+    btn.addEventListener("pointerup", e => {
+      e.preventDefault();
+      const booth = btn.dataset.booth;
+      const boothSelect = document.getElementById("booth-select");
+      if (boothSelect) boothSelect.value = booth;
+      document.getElementById("booth-prompt-modal").classList.add("hidden");
+      loadShortageNames();
+    });
+  });
+  document.getElementById("booth-prompt-cancel")?.addEventListener("pointerup", e => {
+    e.preventDefault();
+    document.getElementById("booth-prompt-modal").classList.add("hidden");
   });
 
   // Duplicate applyRoleVisibility removed – defined later with admin sections
@@ -180,9 +200,14 @@ document.addEventListener("DOMContentLoaded", () => {
         fulfillBtnHtml = `<button class="cta-button secondary fulfill-btn" data-name="${item.name}" data-amount="${fulfillAmount}" style="margin-left: 8px; padding: 0.2rem 0.5rem; font-size: 0.8rem;">Pótlás (${fulfillAmount})</button>`;
       }
 
+      const stock = item.central_stock || 0;
+      let stockStyle = '';
+      if (stock === 0) stockStyle = 'style="color:#f87171; font-weight:bold;"';
+      else if (stock < 0) stockStyle = 'class="negative-stock"';
+
       tr.innerHTML = `
         <td>${item.name}</td>
-        <td>${item.central_stock || 0}</td>
+        <td ${stockStyle}>${stock}</td>
         <td>
           <span style="font-weight: bold; color: ${pendingShortage > 0 ? '#f87171' : 'var(--color-text)'}">${pendingShortage} db</span>
           ${fulfillBtnHtml}
@@ -329,9 +354,19 @@ document.addEventListener("DOMContentLoaded", () => {
     names.forEach(item => {
       const tr = document.createElement("tr");
       tr.dataset.name = item.name;
+      const stock = item.central_stock || 0;
+      const bazar = item.bazar_stock || 0;
+      const fenti = item.fenti_stock || 0;
+      
+      let stockStyle = '';
+      if (stock === 0) stockStyle = 'style="color:#f87171; font-weight:bold;"';
+      else if (stock < 0) stockStyle = 'class="negative-stock"';
+
       tr.innerHTML = `
         <td>${item.name}</td>
-        <td>${item.central_stock || 0}</td>
+        <td ${stockStyle}>${stock}</td>
+        <td style="color:${bazar > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${bazar > 0 ? 'bold' : 'normal'};">${bazar > 0 ? bazar + ' db' : '-'}</td>
+        <td style="color:${fenti > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${fenti > 0 ? 'bold' : 'normal'};">${fenti > 0 ? fenti + ' db' : '-'}</td>
         <td>
           <div class="qty-wrap">
             <div class="qty-quick-btns">
@@ -847,11 +882,18 @@ document.addEventListener("DOMContentLoaded", () => {
     tr.dataset.id = item.id;
     const stock = item.central_stock ?? 0;
     
-    const classIfNeg = stock < 0 ? 'class="negative-stock"' : '';
+    const bazar = item.bazar_stock ?? 0;
+    const fenti = item.fenti_stock ?? 0;
+    
+    let stockStyle = '';
+    if (stock === 0) stockStyle = 'style="color:#f87171; font-weight:bold;"';
+    else if (stock < 0) stockStyle = 'class="negative-stock"';
     
     tr.innerHTML = `
       <td>${item.name}</td>
-      <td ${classIfNeg}>${stock}</td>
+      <td ${stockStyle}>${stock}</td>
+      <td style="color:${bazar > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${bazar > 0 ? 'bold' : 'normal'};">${bazar > 0 ? bazar + ' db' : '-'}</td>
+      <td style="color:${fenti > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${fenti > 0 ? 'bold' : 'normal'};">${fenti > 0 ? fenti + ' db' : '-'}</td>
       <td>
         <button class="edit-btn" aria-label="Szerkesztés">✏️</button>
         <button class="del-btn"  aria-label="Törlés">🗑️</button>
