@@ -550,13 +550,15 @@ document.addEventListener("DOMContentLoaded", () => {
       if (newShortageReq === 0) continue;
       hasChanges = true;
 
-      // Hány darabot tudunk egyből pótolni a raktárból?
+      // Hány darabot tudunk egyből pótolni a raktárból az eddigi (illetve újonnan jelentett) hiányból?
       const fulfillAmount = Math.min(newShortageReq, centralStock);
-      // Mennyi megy a várólistára (függő hiány)?
+      // Mennyi marad, amit nem tudtunk odaadni (tehát ez lesz az új függő hiány)?
       const backorderAmount = newShortageReq - fulfillAmount;
 
       const newCentralStock = centralStock - fulfillAmount;
-      const newPendingShortage = pendingShortage + backorderAmount;
+      // AZ ÚJ függő hiány egyenlő azzal, amit most beírtak, mínusz amit egyből odaadtunk.
+      // NEM adjuk hozzá a régihez (hogy elkerüljük a duplázást, ahogy megbeszéltük).
+      const newPendingShortage = backorderAmount;
 
       pendingShortageUpdates.push({ 
         name, 
