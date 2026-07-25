@@ -110,7 +110,8 @@
             <tr>
               <th>Toll neve</th>
               <th>Raktáron</th>
-              <th>Mennyiség (+ hiány, - többlet)</th>
+              <th>Függő Hiány</th>
+              <th>Új hiány felírása</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -256,7 +257,7 @@
       <div class="modal-box" style="max-width: 680px; width: 95vw;">
         <div class="modal-header">
           <div>
-            <h3>Ki kell vinni</h3>
+            <h3>Hiány összesítő</h3>
             <p style="margin:0; font-size:0.82rem; color:var(--color-subtext);" id="summary-booth-label"></p>
           </div>
           <button id="summary-close" class="modal-close-btn" aria-label="Bezárás">✕</button>
@@ -267,9 +268,10 @@
               <thead>
                 <tr>
                   <th>Toll neve</th>
-                  <th>Kivitel (db)</th>
-                  <th>Raktáron van</th>
-                  <th>Raktáron kellene</th>
+                  <th>Igényelt</th>
+                  <th>Kiadva (Raktárból)</th>
+                  <th>Új Raktárkészlet</th>
+                  <th>Új Függő Hiány</th>
                 </tr>
               </thead>
               <tbody id="summary-list"></tbody>

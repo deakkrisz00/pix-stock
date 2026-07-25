@@ -163,13 +163,30 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadShortageNames() {
     const names = await fetchNames();
     shortageTableBody.innerHTML = "";
+    const currentBooth = boothSelect ? boothSelect.value : 'bazar';
+    const boothField = currentBooth === 'bazar' ? 'bazar_stock' : 'fenti_stock';
+
     names.forEach(item => {
       const tr = document.createElement("tr");
       tr.dataset.name = item.name;
       tr.dataset.central = item.central_stock || 0;
+      
+      const pendingShortage = item[boothField] || 0;
+      tr.dataset.pending = pendingShortage;
+
+      let fulfillBtnHtml = '';
+      if (pendingShortage > 0 && (item.central_stock || 0) > 0) {
+        const fulfillAmount = Math.min(pendingShortage, item.central_stock);
+        fulfillBtnHtml = `<button class="cta-button secondary fulfill-btn" data-name="${item.name}" data-amount="${fulfillAmount}" style="margin-left: 8px; padding: 0.2rem 0.5rem; font-size: 0.8rem;">Pótlás (${fulfillAmount})</button>`;
+      }
+
       tr.innerHTML = `
         <td>${item.name}</td>
         <td>${item.central_stock || 0}</td>
+        <td>
+          <span style="font-weight: bold; color: ${pendingShortage > 0 ? '#f87171' : 'var(--color-text)'}">${pendingShortage} db</span>
+          ${fulfillBtnHtml}
+        </td>
         <td>
           <div class="qty-wrap">
             <!-- Gyors gombok -->
@@ -231,8 +248,72 @@ document.addEventListener("DOMContentLoaded", () => {
       // Kézi bevitel
       input.addEventListener("input", updateInputStyle);
 
+      // Kézi pótlás (Fulfill Backorder) gomb
+      const fulfillBtn = tr.querySelector('.fulfill-btn');
+      if (fulfillBtn) {
+        fulfillBtn.addEventListener('pointerup', async (e) => {
+          e.preventDefault();
+          const name = fulfillBtn.dataset.name;
+          const amount = parseInt(fulfillBtn.dataset.amount, 10);
+          
+          if (confirm(`Biztosan kiviszel ${amount} db-ot a raktárból a ${currentBooth === 'bazar' ? 'Bazárba' : 'Krisztiánhoz'}?`)) {
+            fulfillBtn.disabled = true;
+            fulfillBtn.textContent = '⏳...';
+            await fulfillBackorder(name, currentBooth, amount);
+          }
+        });
+      }
+
       shortageTableBody.appendChild(tr);
     });
+  }
+
+  async function fulfillBackorder(name, booth, amount) {
+    const boothField = booth === 'bazar' ? 'bazar_stock' : 'fenti_stock';
+    
+    // Lekérjük a legfrissebb adatokat
+    const { data: item, error: fetchErr } = await supabaseClient
+      .from('names')
+      .select(`id, central_stock, ${boothField}`)
+      .eq('name', name)
+      .single();
+      
+    if (fetchErr) { console.error(fetchErr); alert('Hiba!'); return; }
+
+    const central = item.central_stock || 0;
+    const pending = item[boothField] || 0;
+
+    if (central < amount || pending < amount) {
+      alert('Közben megváltozott a készlet, frissítem az oldalt!');
+      loadShortageNames();
+      return;
+    }
+
+    // Frissítjük a készleteket
+    const newCentral = central - amount;
+    const newPending = pending - amount;
+    const updatePayload = { central_stock: newCentral };
+    updatePayload[boothField] = newPending;
+
+    const { error: updErr } = await supabaseClient
+      .from('names')
+      .update(updatePayload)
+      .eq('id', item.id);
+
+    if (updErr) { console.error(updErr); alert('Hiba mentéskor!'); return; }
+
+    // Naplózás
+    await supabaseClient.from('transactions').insert({
+      type: 'kivisz',
+      booth: booth,
+      user_name: currentUser || currentRole,
+      items: [{ name, qty: amount }],
+      notes: 'Kézi pótlás (Várólistáról)'
+    });
+
+    alert('Sikeres pótlás!');
+    loadShortageNames();
+    loadAndRenderNames();
   }
 
   boothSelect?.addEventListener("change", loadShortageNames);
@@ -425,20 +506,36 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const row of rows) {
       const name = row.dataset.name;
       const centralStock = parseInt(row.dataset.central, 10) || 0;
-      const qty = parseInt(row.querySelector('.shortage-qty-input').value, 10) || 0;
+      const pendingShortage = parseInt(row.dataset.pending, 10) || 0;
+      const newShortageReq = parseInt(row.querySelector('.shortage-qty-input').value, 10) || 0;
       
-      if (qty === 0) continue;
+      if (newShortageReq === 0) continue;
       hasChanges = true;
-      pendingShortageUpdates.push({ name, qty, centralStock });
 
-      const afterStock = centralStock - qty; // what should be left after taking out
-      const classNeg = afterStock < 0 ? ' style="color:#f87171; font-weight:700;"' : '';
+      // Hány darabot tudunk egyből pótolni a raktárból?
+      const fulfillAmount = Math.min(newShortageReq, centralStock);
+      // Mennyi megy a várólistára (függő hiány)?
+      const backorderAmount = newShortageReq - fulfillAmount;
+
+      const newCentralStock = centralStock - fulfillAmount;
+      const newPendingShortage = pendingShortage + backorderAmount;
+
+      pendingShortageUpdates.push({ 
+        name, 
+        newShortageReq, 
+        fulfillAmount, 
+        backorderAmount, 
+        newCentralStock, 
+        newPendingShortage 
+      });
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${name}</td>
-        <td><strong>${Math.abs(qty)} db</strong></td>
-        <td>${centralStock}</td>
-        <td${classNeg}>${afterStock}</td>
+        <td><strong>${newShortageReq} db</strong></td>
+        <td style="color:${fulfillAmount > 0 ? '#34d399' : 'var(--color-subtext)'}">${fulfillAmount} db</td>
+        <td>${newCentralStock}</td>
+        <td style="color:${newPendingShortage > 0 ? '#f87171' : 'var(--color-text)'}"><strong>${newPendingShortage} db</strong></td>
       `;
       summaryList.appendChild(tr);
     }
@@ -467,14 +564,23 @@ document.addEventListener("DOMContentLoaded", () => {
     summaryConfirm.textContent = "⏳ Mentés...";
 
     const kiviszItems = [];
-    const visszahozItems = [];
+    const boothField = selectedBooth === 'bazar' ? 'bazar_stock' : 'fenti_stock';
 
     for (const update of pendingShortageUpdates) {
-      const { name, qty } = update;
-      if (qty > 0) kiviszItems.push({ name, qty: Math.abs(qty) });
-      else if (qty < 0) visszahozItems.push({ name, qty: Math.abs(qty) });
+      const { name, fulfillAmount, backorderAmount, newCentralStock, newPendingShortage } = update;
       
-      await updateStock(name, selectedBooth, qty);
+      if (fulfillAmount > 0) {
+        kiviszItems.push({ name, qty: fulfillAmount });
+      }
+      
+      // Update DB with exact calculated states
+      const updatePayload = { central_stock: newCentralStock };
+      updatePayload[boothField] = newPendingShortage;
+
+      await supabaseClient
+        .from('names')
+        .update(updatePayload)
+        .eq('name', name);
     }
 
     if (kiviszItems.length > 0) {
@@ -483,17 +589,7 @@ document.addEventListener("DOMContentLoaded", () => {
         booth: selectedBooth,
         user_name: currentUser || currentRole,
         items: kiviszItems,
-        notes: ''
-      });
-    }
-
-    if (visszahozItems.length > 0) {
-      await supabaseClient.from('transactions').insert({
-        type: 'visszahoz',
-        booth: selectedBooth,
-        user_name: currentUser || currentRole,
-        items: visszahozItems,
-        notes: ''
+        notes: 'Hiány pótlása (Készletről)'
       });
     }
     
