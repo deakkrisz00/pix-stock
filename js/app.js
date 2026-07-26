@@ -581,6 +581,56 @@ document.addEventListener("DOMContentLoaded", () => {
   let pendingShortageUpdates = [];
   let selectedBooth = "bazar";
 
+  function renderSummaryList() {
+    summaryList.innerHTML = "";
+    pendingShortageUpdates.forEach((update, index) => {
+      const { name, newShortageReq, currentCentralStock } = update;
+      
+      const fulfillAmount = Math.min(newShortageReq, currentCentralStock);
+      const backorderAmount = newShortageReq - fulfillAmount;
+      const newCentralStock = currentCentralStock - fulfillAmount;
+      const newPendingShortage = backorderAmount;
+
+      update.fulfillAmount = fulfillAmount;
+      update.backorderAmount = backorderAmount;
+      update.newCentralStock = newCentralStock;
+      update.newPendingShortage = newPendingShortage;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <div style="font-weight:bold; color:var(--color-accent);">${name}</div>
+          <button class="cta-button secondary fix-stock-btn" data-index="${index}" style="margin-top:0.4rem; padding:0.2rem 0.5rem; font-size:0.75rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid #ef4444; display:flex; align-items:center; gap:0.3rem;">⚠️ Hibás készlet?</button>
+        </td>
+        <td><strong>${newShortageReq} db</strong></td>
+        <td style="color:${fulfillAmount > 0 ? '#34d399' : 'var(--color-subtext)'}">${fulfillAmount} db</td>
+        <td>${newCentralStock} <span style="font-size:0.75rem;color:var(--color-subtext);">(volt: ${currentCentralStock})</span></td>
+        <td style="color:${newPendingShortage > 0 ? '#f87171' : 'var(--color-text)'}"><strong>${newPendingShortage} db</strong></td>
+      `;
+      summaryList.appendChild(tr);
+    });
+
+    document.querySelectorAll('.fix-stock-btn').forEach(btn => {
+      btn.addEventListener('pointerup', e => {
+        e.preventDefault();
+        const idx = parseInt(btn.dataset.index, 10);
+        const update = pendingShortageUpdates[idx];
+        const valStr = prompt(`Add meg a valós raktárkészletet (A gép szerint jelenleg: ${update.currentCentralStock} db van raktáron)\n\nToll: ${update.name}`, update.currentCentralStock);
+        if (valStr !== null && valStr.trim() !== '') {
+          const newVal = parseInt(valStr, 10);
+          if (!isNaN(newVal) && newVal >= 0) {
+            const diff = newVal - update.originalCentralStock;
+            update.currentCentralStock = newVal;
+            update.correctionDiff = diff;
+            renderSummaryList(); // Újrarajzoljuk az értékeket
+          } else {
+            alert('Érvénytelen szám!');
+          }
+        }
+      });
+    });
+  }
+
   function openSummaryModal() {
     selectedBooth = boothSelect.value;
     const boothName = selectedBooth === 'bazar' ? 'Bazár' : 'Krisztián';
@@ -589,46 +639,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const rows = shortageTableBody.querySelectorAll("tr");
     pendingShortageUpdates = [];
-    summaryList.innerHTML = "";
 
     let hasChanges = false;
     for (const row of rows) {
       const name = row.dataset.name;
       const centralStock = parseInt(row.dataset.central, 10) || 0;
-      const pendingShortage = parseInt(row.dataset.pending, 10) || 0;
       const newShortageReq = parseInt(row.querySelector('.shortage-qty-input').value, 10) || 0;
       
       if (newShortageReq === 0) continue;
       hasChanges = true;
 
-      // Hány darabot tudunk egyből pótolni a raktárból az eddigi (illetve újonnan jelentett) hiányból?
-      const fulfillAmount = Math.min(newShortageReq, centralStock);
-      // Mennyi marad, amit nem tudtunk odaadni (tehát ez lesz az új függő hiány)?
-      const backorderAmount = newShortageReq - fulfillAmount;
-
-      const newCentralStock = centralStock - fulfillAmount;
-      // AZ ÚJ függő hiány egyenlő azzal, amit most beírtak, mínusz amit egyből odaadtunk.
-      // NEM adjuk hozzá a régihez (hogy elkerüljük a duplázást, ahogy megbeszéltük).
-      const newPendingShortage = backorderAmount;
-
       pendingShortageUpdates.push({ 
         name, 
         newShortageReq, 
-        fulfillAmount, 
-        backorderAmount, 
-        newCentralStock, 
-        newPendingShortage 
+        originalCentralStock: centralStock,
+        currentCentralStock: centralStock,
+        correctionDiff: 0
       });
-
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${name}</td>
-        <td><strong>${newShortageReq} db</strong></td>
-        <td style="color:${fulfillAmount > 0 ? '#34d399' : 'var(--color-subtext)'}">${fulfillAmount} db</td>
-        <td>${newCentralStock}</td>
-        <td style="color:${newPendingShortage > 0 ? '#f87171' : 'var(--color-text)'}"><strong>${newPendingShortage} db</strong></td>
-      `;
-      summaryList.appendChild(tr);
     }
 
     if (!hasChanges) {
@@ -636,6 +663,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    renderSummaryList();
     summaryModal.classList.remove("hidden");
   }
 
@@ -656,10 +684,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const kiviszItems = [];
     const osszeirasItems = [];
+    const korrekcioItems = [];
     const boothField = selectedBooth === 'bazar' ? 'bazar_stock' : 'fenti_stock';
 
     for (const update of pendingShortageUpdates) {
-      const { name, fulfillAmount, backorderAmount, newCentralStock, newPendingShortage, newShortageReq } = update;
+      const { name, fulfillAmount, backorderAmount, newCentralStock, newPendingShortage, newShortageReq, correctionDiff } = update;
       
       if (newShortageReq > 0) {
         osszeirasItems.push({ name, qty: newShortageReq });
@@ -667,6 +696,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (fulfillAmount > 0) {
         kiviszItems.push({ name, qty: fulfillAmount });
+      }
+
+      if (correctionDiff && correctionDiff !== 0) {
+        korrekcioItems.push({ name, qty: correctionDiff });
       }
       
       // Update DB with exact calculated states
@@ -677,6 +710,16 @@ document.addEventListener("DOMContentLoaded", () => {
         .from('names')
         .update(updatePayload)
         .eq('name', name);
+    }
+
+    if (korrekcioItems.length > 0) {
+      await supabaseClient.from('transactions').insert({
+        type: 'korrekcio',
+        booth: 'raktár', // Központi raktár
+        user_name: currentUser || currentRole,
+        items: korrekcioItems,
+        notes: 'Összeírás közben javított készlet'
+      });
     }
 
     if (osszeirasItems.length > 0) {
