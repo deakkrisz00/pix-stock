@@ -15,9 +15,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 CREATE TABLE IF NOT EXISTS public.names (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,
-  central_stock INTEGER NOT NULL DEFAULT 0,
-  bazar_stock INTEGER NOT NULL DEFAULT 0,
-  fenti_stock INTEGER NOT NULL DEFAULT 0,
+  central_stock INTEGER NOT NULL DEFAULT 0 CHECK (central_stock >= 0),
+  bazar_stock INTEGER NOT NULL DEFAULT 0 CHECK (bazar_stock >= 0),
+  fenti_stock INTEGER NOT NULL DEFAULT 0 CHECK (fenti_stock >= 0),
   min_stock INTEGER DEFAULT NULL,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   use_count INTEGER NOT NULL DEFAULT 0,

@@ -1,5 +1,5 @@
 // Service Worker – Pix Stock PWA v2
-const CACHE_NAME = 'pix-stock-v3';
+const CACHE_NAME = 'pix-stock-v4';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -24,7 +24,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch – network-first for API, cache-first for assets
+// Fetch – network-first to always ensure latest version
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
@@ -33,17 +33,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // Cache-first for same-origin assets
+  // Network-first strategy
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        if (response.ok && event.request.method === 'GET') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => {
+    fetch(event.request).then((response) => {
+      // If we got a valid response, copy it to cache
+      if (response.ok && event.request.method === 'GET') {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+      }
+      return response;
+    }).catch(() => {
+      // Network failed, fall back to cache
+      return caches.match(event.request).then((cached) => {
+        if (cached) return cached;
         // Offline fallback for navigation
         if (event.request.mode === 'navigate') {
           return caches.match('./index.html');
