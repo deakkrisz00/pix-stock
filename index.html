@@ -31,6 +31,7 @@
         <li data-role="admin" data-section="order-section"     class="nav-item">🛒 Rendelés</li>
         <li data-role="admin" data-section="stats-section"    class="nav-item">📊 Statisztika</li>
         <li data-role="admin" data-section="admin-log-section" class="nav-item">📋 Napló</li>
+        <li data-role="admin" data-section="osszeiras-log-section" class="nav-item">📝 Összeírások</li>
 
         <!-- Worker navigáció -->
         <li data-role="worker" data-section="inventory-section" class="nav-item active">📦 Készlet</li>
@@ -177,6 +178,28 @@
               <th>Bódé / Cél</th>
               <th>Típus</th>
               <th>Összesen</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Osszeiras Log Section -->
+      <section id="osszeiras-log-section" class="section hidden" data-role="admin">
+        <div class="section-header">
+          <h2>📝 Összeírások (Piszkozatok)</h2>
+          <div class="section-actions">
+            <button id="refresh-osszeiras-log" class="cta-button secondary">Frissítés</button>
+          </div>
+        </div>
+        <table class="glass-table" id="osszeiras-log-table">
+          <thead>
+            <tr>
+              <th>Dátum</th>
+              <th>Felhasználó</th>
+              <th>Bódé / Cél</th>
+              <th>Típus</th>
+              <th>Kért mennyiség</th>
             </tr>
           </thead>
           <tbody></tbody>

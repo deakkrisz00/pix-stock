@@ -85,6 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (fab) fab.style.display = (id === "shortage-section") ? "block" : "none";
     if (id === "stats-section") loadStats();
     if (id === "admin-log-section") loadAdminLog();
+    if (id === "osszeiras-log-section") loadOsszeirasLog();
   }
   navItems.forEach(item => {
     item.addEventListener("pointerup", (e) => {
@@ -283,6 +284,31 @@ document.addEventListener("DOMContentLoaded", () => {
         input.classList.toggle("qty-input-active", v !== 0);
       }
 
+      function saveDraftShortage() {
+        const draft = {};
+        document.querySelectorAll('#shortage-table tbody tr').forEach(row => {
+          const inp = row.querySelector('.shortage-qty-input');
+          if (inp) {
+            const val = parseInt(inp.value, 10);
+            if (val !== 0 && !isNaN(val)) {
+              draft[row.dataset.name] = val;
+            }
+          }
+        });
+        localStorage.setItem('pix_draft_shortage', JSON.stringify(draft));
+      }
+
+      function loadDraftValue() {
+        try {
+          const draft = JSON.parse(localStorage.getItem('pix_draft_shortage') || '{}');
+          if (draft[item.name]) {
+            input.value = draft[item.name];
+            updateInputStyle();
+          }
+        } catch (e) {}
+      }
+      loadDraftValue();
+
       // Gyors gombok
       tr.querySelectorAll(".qty-quick-btn[data-add]").forEach(btn => {
         btn.addEventListener("pointerup", e => {
@@ -290,6 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const add = parseInt(btn.dataset.add, 10);
           input.value = add;
           updateInputStyle();
+          saveDraftShortage();
         });
       });
 
@@ -298,10 +325,14 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         input.value = 0;
         updateInputStyle();
+        saveDraftShortage();
       });
 
       // Kézi bevitel
-      input.addEventListener("input", updateInputStyle);
+      input.addEventListener("input", () => {
+        updateInputStyle();
+        saveDraftShortage();
+      });
 
       // Kézi pótlás (Fulfill Backorder) gomb
       const fulfillBtn = tr.querySelector('.fulfill-btn');
@@ -624,11 +655,16 @@ document.addEventListener("DOMContentLoaded", () => {
     summaryConfirm.textContent = "⏳ Mentés...";
 
     const kiviszItems = [];
+    const osszeirasItems = [];
     const boothField = selectedBooth === 'bazar' ? 'bazar_stock' : 'fenti_stock';
 
     for (const update of pendingShortageUpdates) {
-      const { name, fulfillAmount, backorderAmount, newCentralStock, newPendingShortage } = update;
+      const { name, fulfillAmount, backorderAmount, newCentralStock, newPendingShortage, newShortageReq } = update;
       
+      if (newShortageReq > 0) {
+        osszeirasItems.push({ name, qty: newShortageReq });
+      }
+
       if (fulfillAmount > 0) {
         kiviszItems.push({ name, qty: fulfillAmount });
       }
@@ -643,6 +679,16 @@ document.addEventListener("DOMContentLoaded", () => {
         .eq('name', name);
     }
 
+    if (osszeirasItems.length > 0) {
+      await supabaseClient.from('transactions').insert({
+        type: 'osszeiras',
+        booth: selectedBooth,
+        user_name: currentUser || currentRole,
+        items: osszeirasItems,
+        notes: 'Összeírt hiánylista'
+      });
+    }
+
     if (kiviszItems.length > 0) {
       await supabaseClient.from('transactions').insert({
         type: 'kivisz',
@@ -652,6 +698,9 @@ document.addEventListener("DOMContentLoaded", () => {
         notes: 'Hiány pótlása (Készletről)'
       });
     }
+    
+    // Piszkozat törlése a sikeres mentés után
+    localStorage.removeItem('pix_draft_shortage');
     
     summaryConfirm.disabled = false;
     summaryConfirm.textContent = "✅ Mentés az adatbázisba";
@@ -735,6 +784,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const { data, error } = await supabaseClient
       .from('transactions')
       .select('*')
+      .neq('type', 'osszeiras')
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) {
