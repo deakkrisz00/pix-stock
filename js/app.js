@@ -739,7 +739,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <td>${rec.user_name || '–'}</td>
         <td>${boothLabel}</td>
         <td>${typeLabel}</td>
-        <td><strong>${totalItems} db</strong> (${uniqueItems} fajta) <span style="float:right; font-size:0.8rem;">▼</span></td>
+        <td><strong>${totalItems} db</strong> (${uniqueItems} fajta) <span class="cta-button secondary" style="float:right; padding:0.2rem 0.5rem; font-size:0.8rem; cursor:pointer;">Részletek ▼</span></td>
       `;
 
       // Részletek sor (rejtett)
