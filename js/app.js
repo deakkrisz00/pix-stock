@@ -698,6 +698,38 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function deleteSingleTransactionItem(rec, itemIndex) {
+    const item = rec.items[itemIndex];
+    const isConfirmed = confirm(`Biztosan törlöd ezt a tételt (${item.name}: ${item.qty} db)?\nEz visszavonja a készletváltozást erre az egy tételre!`);
+    if (!isConfirmed) return;
+
+    try {
+      if (rec.type === 'kivisz' || rec.type === 'visszahoz') {
+        const reverseQty = rec.type === 'kivisz' ? -Math.abs(item.qty) : Math.abs(item.qty);
+        await updateStock(item.name, rec.booth, reverseQty);
+      }
+
+      const newItems = [...rec.items];
+      newItems.splice(itemIndex, 1);
+
+      if (newItems.length === 0) {
+        const { error } = await supabaseClient.from('transactions').delete().eq('id', rec.id);
+        if (error) throw error;
+        alert("Utolsó tétel is törölve, így a teljes tranzakció törlődött.");
+      } else {
+        const { error } = await supabaseClient.from('transactions').update({ items: newItems }).eq('id', rec.id);
+        if (error) throw error;
+        alert("Tétel sikeresen törölve a listából, készlet visszaállítva!");
+      }
+
+      loadAdminLog();
+      loadAndRenderNames();
+    } catch (err) {
+      console.error(err);
+      alert("Hiba történt a törlés során: " + err.message);
+    }
+  }
+
   async function loadAdminLog() {
     adminLogTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--color-subtext);">⏳ Betöltés...</td></tr>`;
     const { data, error } = await supabaseClient
@@ -746,19 +778,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const detailsTr = document.createElement('tr');
       detailsTr.className = 'log-details-row';
       
-      const itemsHtml = items.map(item => `
-        <li>
-          <span>${item.name}</span>
-          <span class="log-qty-badge">${item.qty} db</span>
+      const itemsHtml = items.map((item, index) => `
+        <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
+          <div>
+            <span>${item.name}</span>
+            <span class="log-qty-badge" style="margin-left:0.5rem;">${item.qty} db</span>
+          </div>
+          <button class="cta-button del-single-item-btn" data-index="${index}" style="background:transparent; color:#ef4444; border:1px solid #ef4444; padding:0.1rem 0.4rem; font-size:0.75rem;">❌ Törlés</button>
         </li>
       `).join('');
 
       detailsTr.innerHTML = `
         <td colspan="5" style="padding: 0;">
           <div class="log-details-content">
-            <ul>${itemsHtml}</ul>
+            <ul style="list-style:none; padding:0; margin:0;">${itemsHtml}</ul>
             <div style="margin-top: 1rem; text-align: right;">
-              <button class="cta-button del-transaction-btn" style="background:#ef4444; padding:0.4rem 1rem; font-size:0.85rem;">🗑️ Tranzakció Törlése</button>
+              <button class="cta-button del-transaction-btn" style="background:#ef4444; padding:0.4rem 1rem; font-size:0.85rem;">🗑️ Teljes Tranzakció Törlése</button>
             </div>
           </div>
         </td>
@@ -768,6 +803,15 @@ document.addEventListener("DOMContentLoaded", () => {
       delBtn.addEventListener('pointerup', (e) => {
         e.stopPropagation();
         deleteTransaction(rec);
+      });
+
+      const delSingleBtns = detailsTr.querySelectorAll('.del-single-item-btn');
+      delSingleBtns.forEach(btn => {
+        btn.addEventListener('pointerup', (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-index'), 10);
+          deleteSingleTransactionItem(rec, idx);
+        });
       });
 
       // Kattintás esemény
