@@ -145,19 +145,39 @@
           <div class="section-actions">
             <select id="stats-period" class="styled-select">
               <option value="7">Utolsó 7 nap</option>
-              <option value="30">Utolsó 30 nap</option>
+              <option value="30" selected>Utolsó 30 nap</option>
               <option value="90">Utolsó 90 nap</option>
             </select>
             <button id="refresh-stats" class="cta-button secondary">🔄 Frissít</button>
           </div>
         </div>
+        
+        <!-- Kártyák -->
         <div id="stats-cards" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-bottom:1.5rem;"></div>
-        <h3 style="margin:0 0 0.8rem; font-size:1rem;">Legutóbbi kiszallítások töllenként</h3>
-        <div style="overflow-x:auto;">
-          <table class="glass-table" id="stats-table">
-            <thead><tr><th>Toll neve</th><th>Kivitt Összesen (db)</th><th>Utoljára</th></tr></thead>
-            <tbody></tbody>
-          </table>
+        
+        <!-- Táblázatok -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:1.5rem;">
+          
+          <div>
+            <h3 style="margin:0 0 0.8rem; font-size:1rem; color:#f87171;">⚠️ Kifogyóban (Központi raktár)</h3>
+            <div style="overflow-x:auto;">
+              <table class="glass-table" id="low-stock-table">
+                <thead><tr><th>Toll neve</th><th style="text-align:center;">Készlet (db)</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h3 style="margin:0 0 0.8rem; font-size:1rem; color:#34d399;">🔥 Legjobban fogyó (Toplista)</h3>
+            <div style="overflow-x:auto;">
+              <table class="glass-table" id="stats-table">
+                <thead><tr><th>Toll neve</th><th style="text-align:center;">Kivitt (db)</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </section>
 

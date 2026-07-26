@@ -757,6 +757,128 @@ document.addEventListener("DOMContentLoaded", () => {
   summaryConfirm?.addEventListener("pointerup", e => { e.preventDefault(); confirmShortage(); });
   submitShortageBtn?.addEventListener("pointerup", e => { e.preventDefault(); openSummaryModal(); });
 
+  // ── STATISZTIKA SECTION ───────────────────────────────────────
+  const statsPeriodSelect = document.getElementById("stats-period");
+  const refreshStatsBtn = document.getElementById("refresh-stats");
+  const statsCardsContainer = document.getElementById("stats-cards");
+  const lowStockTableBody = document.querySelector("#low-stock-table tbody");
+  const statsTableBody = document.querySelector("#stats-table tbody");
+
+  async function loadStats() {
+    const days = parseInt(statsPeriodSelect?.value || "30", 10);
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - days);
+
+    if (statsCardsContainer) statsCardsContainer.innerHTML = `<div style="color:var(--color-subtext);">⏳ Adatok betöltése...</div>`;
+    if (lowStockTableBody) lowStockTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center;">⏳ Betöltés...</td></tr>`;
+    if (statsTableBody) statsTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center;">⏳ Betöltés...</td></tr>`;
+
+    const { data: txData, error: txError } = await supabaseClient
+      .from('transactions')
+      .select('*')
+      .eq('type', 'kivisz')
+      .gte('created_at', fromDate.toISOString());
+
+    const { data: namesData, error: namesError } = await supabaseClient
+      .from('names')
+      .select('name, central_stock');
+
+    if (txError || namesError) {
+      console.error(txError, namesError);
+      if (statsCardsContainer) statsCardsContainer.innerHTML = `<div style="color:#f87171;">Hiba történt az adatok letöltésekor.</div>`;
+      return;
+    }
+
+    let totalItemsTaken = 0;
+    const penSales = {};
+
+    (txData || []).forEach(tx => {
+      const items = Array.isArray(tx.items) ? tx.items : [];
+      items.forEach(item => {
+        const qty = Math.abs(item.qty || 0);
+        totalItemsTaken += qty;
+        penSales[item.name] = (penSales[item.name] || 0) + qty;
+      });
+    });
+
+    let topPenName = "Nincs adat";
+    let topPenQty = 0;
+    for (const [pName, pQty] of Object.entries(penSales)) {
+      if (pQty > topPenQty) {
+        topPenQty = pQty;
+        topPenName = pName;
+      }
+    }
+
+    let totalCentralStock = 0;
+    const stockList = [];
+    (namesData || []).forEach(n => {
+      const s = parseInt(n.central_stock, 10) || 0;
+      totalCentralStock += s;
+      stockList.push({ name: n.name, stock: s });
+    });
+
+    if (statsCardsContainer) {
+      statsCardsContainer.innerHTML = `
+        <div class="glass-card" style="padding:1.5rem; text-align:center; border-left: 4px solid var(--color-accent);">
+          <div style="font-size:0.85rem; color:var(--color-subtext); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:1px;">Kivitt tollak (${days} nap)</div>
+          <div style="font-size:2rem; font-weight:800; color:var(--color-text);">${totalItemsTaken} db</div>
+        </div>
+        <div class="glass-card" style="padding:1.5rem; text-align:center; border-left: 4px solid #34d399;">
+          <div style="font-size:0.85rem; color:var(--color-subtext); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:1px;">Legnépszerűbb toll</div>
+          <div style="font-size:1.4rem; font-weight:800; color:var(--color-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${topPenName}</div>
+          <div style="font-size:0.85rem; color:var(--color-subtext); font-weight:600; margin-top:0.3rem;">${topPenQty > 0 ? topPenQty + ' db fogyott' : ''}</div>
+        </div>
+        <div class="glass-card" style="padding:1.5rem; text-align:center; border-left: 4px solid #6366f1;">
+          <div style="font-size:0.85rem; color:var(--color-subtext); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:1px;">Teljes raktárkészlet</div>
+          <div style="font-size:2rem; font-weight:800; color:var(--color-text);">${totalCentralStock} db</div>
+        </div>
+      `;
+    }
+
+    stockList.sort((a, b) => a.stock - b.stock);
+    if (lowStockTableBody) {
+      lowStockTableBody.innerHTML = "";
+      const lowestStock = stockList.slice(0, 15);
+      if (lowestStock.length === 0) {
+        lowStockTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--color-subtext);">Nincs adat</td></tr>`;
+      } else {
+        lowestStock.forEach(item => {
+          let color = 'var(--color-text)';
+          if (item.stock === 0) color = '#f87171';
+          else if (item.stock < 10) color = '#fbbf24';
+          
+          lowStockTableBody.innerHTML += `
+            <tr>
+              <td>${item.name}</td>
+              <td style="text-align:center; font-weight:bold; color:${color};">${item.stock}</td>
+            </tr>
+          `;
+        });
+      }
+    }
+
+    if (statsTableBody) {
+      statsTableBody.innerHTML = "";
+      const sortedSales = Object.entries(penSales).map(([name, qty]) => ({ name, qty })).sort((a, b) => b.qty - a.qty);
+      if (sortedSales.length === 0) {
+        statsTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--color-subtext);">Nincs kivitel az elmúlt ${days} napban</td></tr>`;
+      } else {
+        sortedSales.forEach(item => {
+          statsTableBody.innerHTML += `
+            <tr>
+              <td>${item.name}</td>
+              <td style="text-align:center; font-weight:bold;">${item.qty}</td>
+            </tr>
+          `;
+        });
+      }
+    }
+  }
+
+  refreshStatsBtn?.addEventListener("pointerup", e => { e.preventDefault(); loadStats(); });
+  statsPeriodSelect?.addEventListener("change", loadStats);
+
   // ── ADMIN LOG SECTION ───────────────────────────────────────
   const refreshLogBtn = document.getElementById("refresh-log");
   const adminLogTableBody = document.querySelector("#admin-log-table tbody");
