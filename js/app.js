@@ -195,7 +195,7 @@ document.addEventListener("DOMContentLoaded", () => {
     tablesToFilter.forEach(tableSelector => {
       document.querySelectorAll(`${tableSelector} tbody tr`).forEach(tr => {
         const name = tr.dataset.name?.toLowerCase() || tr.firstElementChild?.textContent.toLowerCase() || "";
-        if (name.includes(term)) {
+        if (name.startsWith(term)) {
           tr.style.display = "";
         } else {
           tr.style.display = "none";

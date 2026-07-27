@@ -740,57 +740,6 @@ body.light-theme .summary-item {
   font-weight: 700 !important;
 }
 
-/* ── Floating Search ── */
-.floating-search-container {
-  position: fixed;
-  bottom: 1.5rem;
-  left: 1.5rem;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.floating-search-btn {
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 56px;
-  height: 56px;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s, background 0.2s;
-  -webkit-tap-highlight-color: transparent;
-}
-.floating-search-btn:active {
-  transform: scale(0.9);
-}
-.floating-search-input {
-  width: 0;
-  opacity: 0;
-  pointer-events: none;
-  transition: width 0.3s ease, opacity 0.3s ease;
-  padding: 0;
-  border: none;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  border-radius: 28px;
-}
-.floating-search-container.active .floating-search-input {
-  width: 250px;
-  opacity: 1;
-  pointer-events: auto;
-  padding: 0.8rem 1.5rem;
-  border: 1px solid var(--color-primary);
-}
-@media (max-width: 640px) {
-  .floating-search-container {
-    bottom: 1rem;
-    left: 1rem;
-  }
-}
 
 /* Admin Log UI Improvements */
 .log-main-row {
