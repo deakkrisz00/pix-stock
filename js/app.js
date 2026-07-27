@@ -620,7 +620,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </td>
         <td>
           <div style="font-size:1.1rem;"><strong>${newShortageReq} db</strong></div>
-          ${newPendingShortage > 0 ? \`<div style="font-size:0.8rem; color:#f87171; margin-top:0.2rem;">Új hiány: ${newPendingShortage} db</div>\` : ''}
+          ${newPendingShortage > 0 ? `<div style="font-size:0.8rem; color:#f87171; margin-top:0.2rem;">Új hiány: ${newPendingShortage} db</div>` : ''}
         </td>
         <td>
           <div style="font-size:1.1rem;"><strong>${currentCentralStock} db</strong></div>
