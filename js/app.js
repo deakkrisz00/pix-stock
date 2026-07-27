@@ -1069,6 +1069,104 @@ document.addEventListener("DOMContentLoaded", () => {
 
   refreshLogBtn?.addEventListener('pointerup', e => { e.preventDefault(); loadAdminLog(); });
 
+  // ── OSSZEIRAS LOG SECTION ─────────────────────────────────────
+  const refreshOsszeirasLogBtn = document.getElementById("refresh-osszeiras-log");
+  const osszeirasLogTableBody = document.querySelector("#osszeiras-log-table tbody");
+
+  async function loadOsszeirasLog() {
+    if (!osszeirasLogTableBody) return;
+    osszeirasLogTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--color-subtext);">⏳ Betöltés...</td></tr>`;
+    const { data, error } = await supabaseClient
+      .from('transactions')
+      .select('*')
+      .eq('type', 'osszeiras')
+      .order('created_at', { ascending: false })
+      .limit(200);
+      
+    if (error) {
+      osszeirasLogTableBody.innerHTML = `<tr><td colspan="5" style="color:#f87171;">Hiba: ${error.message}</td></tr>`;
+      console.error(error);
+      return;
+    }
+    osszeirasLogTableBody.innerHTML = "";
+    if (!data || data.length === 0) {
+      osszeirasLogTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--color-subtext);">Nincs bejegyzés</td></tr>`;
+      return;
+    }
+    
+    data.forEach(rec => {
+      let boothLabel = rec.booth;
+      if (rec.booth === 'bazar') boothLabel = 'Bazár';
+      else if (rec.booth === 'fenti') boothLabel = 'Krisztián';
+      else if (!boothLabel) boothLabel = '–';
+
+      const items = Array.isArray(rec.items) ? rec.items : [];
+      const totalItems = items.reduce((sum, item) => sum + Math.abs(item.qty), 0);
+      const uniqueItems = items.length;
+
+      // Fő sor
+      const mainTr = document.createElement('tr');
+      mainTr.className = 'log-main-row';
+      mainTr.innerHTML = `
+        <td>${new Date(rec.created_at).toLocaleString('hu-HU')}</td>
+        <td>${rec.user_name || '–'}</td>
+        <td>${boothLabel}</td>
+        <td>📝 Összeírás</td>
+        <td><strong>${totalItems} db</strong> (${uniqueItems} fajta) <span class="cta-button secondary" style="float:right; padding:0.2rem 0.5rem; font-size:0.8rem; cursor:pointer;">Részletek ▼</span></td>
+      `;
+
+      // Részletek sor
+      const detailsTr = document.createElement('tr');
+      detailsTr.className = 'log-details-row';
+      
+      const itemsHtml = items.map((item) => `
+        <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
+          <div>
+            <span>${item.name}</span>
+            <span class="log-qty-badge" style="margin-left:0.5rem; background:rgba(99, 102, 241, 0.15); color:var(--color-accent);">${item.qty} db</span>
+          </div>
+        </li>
+      `).join('');
+
+      detailsTr.innerHTML = `
+        <td colspan="5" style="padding: 0;">
+          <div class="log-details-content">
+            <ul style="list-style:none; padding:0; margin:0;">${itemsHtml}</ul>
+            <div style="margin-top: 1rem; text-align: right;">
+              <button class="cta-button del-transaction-btn" style="background:#ef4444; padding:0.4rem 1rem; font-size:0.85rem;">🗑️ Piszkozat Törlése</button>
+            </div>
+          </div>
+        </td>
+      `;
+
+      const delBtn = detailsTr.querySelector('.del-transaction-btn');
+      delBtn.addEventListener('pointerup', async (e) => {
+        e.stopPropagation();
+        if (!confirm("Biztosan törlöd ezt az összeírás listát?")) return;
+        try {
+          const { error } = await supabaseClient.from('transactions').delete().eq('id', rec.id);
+          if (error) throw error;
+          alert("Összeírás törölve.");
+          loadOsszeirasLog();
+        } catch(err) {
+          alert("Hiba: " + err.message);
+        }
+      });
+
+      // Kattintás esemény
+      mainTr.addEventListener("pointerup", (e) => {
+        e.preventDefault();
+        const isOpen = detailsTr.classList.contains("open");
+        document.querySelectorAll('#osszeiras-log-table .log-details-row.open').forEach(row => row.classList.remove('open'));
+        if (!isOpen) detailsTr.classList.add("open");
+      });
+
+      osszeirasLogTableBody.appendChild(mainTr);
+      osszeirasLogTableBody.appendChild(detailsTr);
+    });
+  }
+
+  refreshOsszeirasLogBtn?.addEventListener('pointerup', e => { e.preventDefault(); loadOsszeirasLog(); });
 
 
   // ── NEVEK / KÉSZLET (names tábla) ────────────────────────────
