@@ -618,10 +618,16 @@ document.addEventListener("DOMContentLoaded", () => {
           <div style="font-weight:bold; color:var(--color-accent);">${name}</div>
           <button class="cta-button secondary fix-stock-btn" data-index="${index}" style="margin-top:0.4rem; padding:0.2rem 0.5rem; font-size:0.75rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; border:1px solid #ef4444; display:flex; align-items:center; gap:0.3rem;">⚠️ Hibás készlet?</button>
         </td>
-        <td><strong>${newShortageReq} db</strong></td>
-        <td style="color:${fulfillAmount > 0 ? '#34d399' : 'var(--color-subtext)'}">${fulfillAmount} db</td>
-        <td>${newCentralStock} <span style="font-size:0.75rem;color:var(--color-subtext);">(volt: ${currentCentralStock})</span></td>
-        <td style="color:${newPendingShortage > 0 ? '#f87171' : 'var(--color-text)'}"><strong>${newPendingShortage} db</strong></td>
+        <td>
+          <div style="font-size:1.1rem;"><strong>${newShortageReq} db</strong></div>
+          ${newPendingShortage > 0 ? \`<div style="font-size:0.8rem; color:#f87171; margin-top:0.2rem;">Új hiány: ${newPendingShortage} db</div>\` : ''}
+        </td>
+        <td>
+          <div style="font-size:1.1rem;"><strong>${currentCentralStock} db</strong></div>
+          <div style="font-size:0.8rem; color:var(--color-subtext); margin-top:0.2rem;">
+            Kiadva: <span style="color:${fulfillAmount > 0 ? '#34d399' : 'inherit'}">${fulfillAmount}</span> | Marad: ${newCentralStock}
+          </div>
+        </td>
       `;
       summaryList.appendChild(tr);
     });
