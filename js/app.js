@@ -209,11 +209,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const floatingSearchBtn = document.getElementById("floating-search-btn");
   const floatingSearchContainer = document.getElementById("floating-search-container");
   
-  floatingSearchBtn?.addEventListener("pointerup", (e) => {
+  floatingSearchBtn?.addEventListener("click", (e) => {
     e.preventDefault();
     floatingSearchContainer.classList.toggle("active");
     if (floatingSearchContainer.classList.contains("active")) {
-      setTimeout(() => globalSearchInput.focus(), 100);
+      globalSearchInput.focus();
     } else {
       if (globalSearchInput.value !== "") {
         globalSearchInput.value = "";
