@@ -108,6 +108,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const boothSelect = document.getElementById("booth-select");
       if (boothSelect) boothSelect.value = booth;
       document.getElementById("booth-prompt-modal").classList.add("hidden");
+
+      const draftStr = localStorage.getItem('pix_draft_shortage');
+      if (draftStr && draftStr !== '{}') {
+        if (!confirm("Korábban megkezdett összeírás található.\nSzeretnéd folytatni?\n(Ha a Mégsem/Cancel-re kattintasz, törlődik a piszkozat)")) {
+          localStorage.removeItem('pix_draft_shortage');
+        }
+      }
+
       loadShortageNames();
     });
   });
@@ -403,7 +411,15 @@ document.addEventListener("DOMContentLoaded", () => {
     loadAndRenderNames();
   }
 
-  boothSelect?.addEventListener("change", loadShortageNames);
+  boothSelect?.addEventListener("change", (e) => {
+    const draftStr = localStorage.getItem('pix_draft_shortage');
+    if (draftStr && draftStr !== '{}') {
+      if (!confirm("Bódét váltottál. A korábbi összeírási piszkozatod még megvan.\nSzeretnéd megtartani és folytatni?\n(Mégsem = Piszkozat törlése)")) {
+        localStorage.removeItem('pix_draft_shortage');
+      }
+    }
+    loadShortageNames();
+  });
 
   // ── ORDER SECTION LOGIKA (Admin only) ────────────────────────
   const orderTableBody = document.querySelector("#order-table tbody");
