@@ -1387,6 +1387,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Szűrés támogatáshoz beállítjuk a data attribútumokat
     tr.dataset.category = cat;
     tr.dataset.stock = stock;
+    tr.dataset.bazar = bazar;
+    tr.dataset.fenti = fenti;
     
     tr.innerHTML = `
       <td>${item.name}</td>
@@ -1415,18 +1417,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const inventoryHeaders = document.querySelectorAll("#inventory-table th[data-sort]");
   inventoryHeaders.forEach(th => {
     th.addEventListener("pointerup", () => {
+      if (currentRole !== "admin") return;
+
       const type = th.dataset.sort;
       const isAsc = th.dataset.asc === "true";
+      const span = th.querySelector("span[data-role='admin']");
+      if (!span) return;
       
       // Reset all arrows
       inventoryHeaders.forEach(h => {
         h.dataset.asc = "";
-        h.textContent = h.textContent.replace(" ⬇️", " ↕️").replace(" ⬆️", " ↕️");
+        const s = h.querySelector("span[data-role='admin']");
+        if (s) s.textContent = s.textContent.replace("⬇️", "↕️").replace("⬆️", "↕️");
       });
 
       // Set new direction
       th.dataset.asc = (!isAsc).toString();
-      th.textContent = th.textContent.replace(" ↕️", !isAsc ? " ⬆️" : " ⬇️");
+      span.textContent = span.textContent.replace("↕️", !isAsc ? "⬆️" : "⬇️");
 
       const rows = Array.from(namesTableBody.querySelectorAll("tr"));
       
@@ -1440,6 +1447,14 @@ document.addEventListener("DOMContentLoaded", () => {
           // A 2. oszlop a raktárkészlet
           valA = parseInt(a.dataset.stock, 10) || 0;
           valB = parseInt(b.dataset.stock, 10) || 0;
+          
+          if (valA === valB) {
+            // Másodlagos rendezés állvány hiány alapján
+            const rackA = (parseInt(a.dataset.bazar, 10) || 0) + (parseInt(a.dataset.fenti, 10) || 0);
+            const rackB = (parseInt(b.dataset.bazar, 10) || 0) + (parseInt(b.dataset.fenti, 10) || 0);
+            return !isAsc ? rackB - rackA : rackB - rackA; // Hiány szerint mindig csökkenő a másodlagos!
+          }
+          
           return !isAsc ? valA - valB : valB - valA;
         }
       });
