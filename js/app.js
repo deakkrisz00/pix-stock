@@ -185,17 +185,44 @@ document.addEventListener("DOMContentLoaded", () => {
     applyRoleVisibility();
   });
 
+  // ── CATEGORIES ────────────────────────────────────────────────
+  let globalCategories = [];
+  
+  async function fetchCategories() {
+    const { data, error } = await supabaseClient.from('categories').select('*').order('limit_stock', { ascending: false });
+    if (error) { console.error('fetchCategories:', error); return; }
+    globalCategories = data || [];
+    populateCategoryDropdowns();
+    renderCategoriesTable();
+  }
+  
+  function getCategory(id) {
+    return globalCategories.find(c => c.id === id) || { id, name: 'Ismeretlen', icon: '❓', limit_stock: 0 };
+  }
+  
+  function populateCategoryDropdowns() {
+    const filters = document.querySelectorAll('.category-filter-select');
+    const editSelect = document.getElementById('edit-item-category');
+    
+    const filterOptionsHTML = `
+      <option value="ALL">Minden kategória</option>
+      <option value="CRITICAL">⚠️ Csak a kritikus készletűek</option>
+      ${globalCategories.map(c => `<option value="${c.id}">${c.icon} ${c.name} (${c.id})</option>`).join('')}
+    `;
+    filters.forEach(f => {
+      const currentVal = f.value;
+      f.innerHTML = filterOptionsHTML;
+      if (currentVal && currentVal !== '') f.value = currentVal;
+    });
+
+    if (editSelect) {
+      editSelect.innerHTML = globalCategories.map(c => `<option value="${c.id}">${c.icon} ${c.name} (${c.id})</option>`).join('');
+    }
+  }
+
   // ── GLOBAL SEARCH ÉS SZŰRÉS ───────────────────────────────
   const globalSearchInput = document.getElementById("global-search-input");
   const categoryFilters = document.querySelectorAll(".category-filter-select");
-  
-  const categoryThresholds = {
-    "A": 15,
-    "B": 10,
-    "C": 5,
-    "D": 3,
-    "E": 0
-  };
   
   let currentFilterMode = "ALL";
 
@@ -223,7 +250,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let showByCat = true;
         
         if (filterMode === "CRITICAL") {
-          const limit = categoryThresholds[cat] || 0;
+          const limit = getCategory(cat).limit_stock;
           if (stock >= limit) showByCat = false;
         } else if (filterMode !== "ALL") {
           if (cat !== filterMode) showByCat = false;
@@ -479,12 +506,8 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (stock < 0) stockStyle = 'class="negative-stock"';
 
       const cat = item.category || 'C';
-      let catIcon = '';
-      if (cat === 'A') catIcon = '🏆 (A)';
-      if (cat === 'B') catIcon = '📈 (B)';
-      if (cat === 'C') catIcon = 'Úgy ne 😐 (C)';
-      if (cat === 'D') catIcon = '🐌 (D)';
-      if (cat === 'E') catIcon = '😭 (E)';
+      const catObj = getCategory(cat);
+      const catIcon = `${catObj.icon} (${catObj.id})`;
 
       tr.innerHTML = `
         <td>
@@ -886,7 +909,7 @@ document.addEventListener("DOMContentLoaded", () => {
       totalCentralStock += s;
       
       const cat = n.category || 'C';
-      const limit = categoryThresholds[cat] || 0;
+      const limit = getCategory(cat).limit_stock;
       const rackShortage = (parseInt(n.bazar_stock, 10) || 0) + (parseInt(n.fenti_stock, 10) || 0);
 
       if (s < limit) {
@@ -1377,12 +1400,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Kategória ikon és kritikus szint jelzés
     const cat = item.category || 'C';
-    let catIcon = '';
-    if (cat === 'A') catIcon = '🏆 (A)';
-    if (cat === 'B') catIcon = '📈 (B)';
-    if (cat === 'C') catIcon = 'Úgy ne 😐 (C)';
-    if (cat === 'D') catIcon = '🐌 (D)';
-    if (cat === 'E') catIcon = '😭 (E)';
+    const catObj = getCategory(cat);
+    const catIcon = `${catObj.icon} (${catObj.id})`;
     
     // Szűrés támogatáshoz beállítjuk a data attribútumokat
     tr.dataset.category = cat;
@@ -2043,8 +2062,110 @@ document.addEventListener("DOMContentLoaded", () => {
       .subscribe();
   }
 
+  // ── CATEGORIES UI & AUTO-CATEGORIZE ───────────────────────────
+  const categoriesTableBody = document.querySelector('#categories-table tbody');
+  
+  function renderCategoriesTable() {
+    if (!categoriesTableBody) return;
+    categoriesTableBody.innerHTML = '';
+    globalCategories.forEach(cat => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-weight:bold;">${cat.id}</td>
+        <td><input type="text" class="styled-input cat-icon" value="${cat.icon}" style="width:60px; text-align:center;"></td>
+        <td><input type="text" class="styled-input cat-name" value="${cat.name}"></td>
+        <td><input type="number" class="styled-input cat-limit" value="${cat.limit_stock}" style="width:80px; text-align:center;"></td>
+        <td><button class="cta-button secondary save-cat-btn">💾 Mentés</button></td>
+      `;
+      tr.querySelector('.save-cat-btn').addEventListener('pointerup', async (e) => {
+        e.preventDefault();
+        const nIcon = tr.querySelector('.cat-icon').value;
+        const nName = tr.querySelector('.cat-name').value;
+        const nLimit = parseInt(tr.querySelector('.cat-limit').value, 10) || 0;
+        const { error } = await supabaseClient.from('categories').update({ name: nName, icon: nIcon, limit_stock: nLimit }).eq('id', cat.id);
+        if (error) { alert('Hiba mentéskor!'); console.error(error); }
+        else { 
+          alert('Mentve!'); 
+          await fetchCategories(); 
+          applyGlobalSearchFilter(); 
+          loadStats(); 
+          loadAndRenderNames(); 
+          loadOrderNames(); 
+        }
+      });
+      categoriesTableBody.appendChild(tr);
+    });
+  }
+
+  document.getElementById('auto-categorize-btn')?.addEventListener('pointerup', async (e) => {
+    e.preventDefault();
+    if (!confirm('Biztosan újra akarod kategorizálni a tollakat az elmúlt 30 nap eladásai alapján? (10%-20%-40%-20%-10% elosztás)')) return;
+    
+    document.getElementById('auto-categorize-btn').textContent = '⏳ Kis türelmet...';
+
+    // 1. Lekérjük a tranzakciókat
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - 30);
+    const { data: txData } = await supabaseClient.from('transactions').select('items').eq('type', 'kivisz').gte('created_at', fromDate.toISOString());
+    
+    const sales = {};
+    (txData || []).forEach(tx => {
+      (tx.items || []).forEach(item => {
+        sales[item.name] = (sales[item.name] || 0) + Math.abs(item.qty || 0);
+      });
+    });
+
+    // 2. Lekérjük a neveket
+    const { data: names } = await supabaseClient.from('names').select('id, name, category');
+    if (!names) return;
+
+    // Minden névhez hozzárendeljük az eladást
+    names.forEach(n => { n.sales = sales[n.name] || 0; });
+
+    // Rendezzük csökkenő sorrendbe (legtöbb eladás elöl)
+    names.sort((a, b) => b.sales - a.sales);
+
+    const total = names.length;
+    const aCount = Math.round(total * 0.10);
+    const bCount = Math.round(total * 0.20);
+    const cCount = Math.round(total * 0.40);
+    const dCount = Math.round(total * 0.20);
+
+    let updates = [];
+    for (let i = 0; i < total; i++) {
+      let newCat = 'E';
+      if (i < aCount) newCat = 'A';
+      else if (i < aCount + bCount) newCat = 'B';
+      else if (i < aCount + bCount + cCount) newCat = 'C';
+      else if (i < aCount + bCount + cCount + dCount) newCat = 'D';
+
+      if (names[i].category !== newCat) {
+        updates.push({ id: names[i].id, category: newCat });
+      }
+    }
+
+    if (updates.length === 0) {
+      alert('Nincs szükség változtatásra, minden a megfelelő kategóriában van!');
+      document.getElementById('auto-categorize-btn').textContent = '✨ Automatikus Kategorizálás';
+      return;
+    }
+
+    // Supabase update for each
+    let errorCount = 0;
+    for (const u of updates) {
+      const { error } = await supabaseClient.from('names').update({ category: u.category }).eq('id', u.id);
+      if (error) errorCount++;
+    }
+
+    alert(`${updates.length} toll kategóriája frissítve lett! (Hiba: ${errorCount})`);
+    document.getElementById('auto-categorize-btn').innerHTML = '✨ Automatikus Kategorizálás';
+    loadAndRenderNames();
+    loadOrderNames();
+    loadStats();
+  });
+
   // ── INDÍTÁS ──────────────────────────────────────────────────
-  function initApp() {
+  async function initApp() {
     // Ha korábban belépett ezen az eszközön → automatikus bejelentkezés
     const savedUser = localStorage.getItem("pix_user");
     const savedRole = localStorage.getItem("pix_role");

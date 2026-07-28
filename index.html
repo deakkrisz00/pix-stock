@@ -30,6 +30,7 @@
         <li data-role="admin" data-section="shortage-section" class="nav-item">📉 Hiány / Feltöltés</li>
         <li data-role="admin" data-section="order-section"     class="nav-item">🛒 Rendelés</li>
         <li data-role="admin" data-section="stats-section"    class="nav-item">📊 Statisztika</li>
+        <li data-role="admin" data-section="categories-section" class="nav-item">🏷️ Kategóriák</li>
         <li data-role="admin" data-section="admin-log-section" class="nav-item">📋 Napló</li>
         <li data-role="admin" data-section="osszeiras-log-section" class="nav-item">📝 Összeírások</li>
         <li data-role="admin" data-section="import-log-section" class="nav-item">📥 Import Napló</li>
@@ -127,13 +128,7 @@
           <h2>Rendelés Export</h2>
           <div class="section-actions">
             <select class="styled-select category-filter-select">
-              <option value="ALL">Minden kategória</option>
-              <option value="CRITICAL">⚠️ Csak a kritikus készletűek</option>
-              <option value="A">🏆 Top nevek (A)</option>
-              <option value="B">📈 Jól veszik (B)</option>
-              <option value="C">😐 Úgy ne (C)</option>
-              <option value="D">🐌 Ritkán keresett (D)</option>
-              <option value="E">😭 Vesztesek (E)</option>
+              <!-- JS tölti fel -->
             </select>
             <button id="export-order-btn" class="cta-button">📥 Excel Export</button>
           </div>
@@ -157,13 +152,7 @@
           <h2>📊 Statisztika</h2>
           <div class="section-actions">
             <select class="styled-select category-filter-select">
-              <option value="ALL">Minden kategória</option>
-              <option value="CRITICAL">⚠️ Csak a kritikus készletűek</option>
-              <option value="A">🏆 Top nevek (A)</option>
-              <option value="B">📈 Jól veszik (B)</option>
-              <option value="C">Úgy ne 😐 (C)</option>
-              <option value="D">🐌 Ritkán keresett (D)</option>
-              <option value="E">😭 Vesztesek (E)</option>
+              <!-- JS tölti fel -->
             </select>
             <select id="stats-period" class="styled-select">
               <option value="7">Utolsó 7 nap</option>
@@ -206,6 +195,38 @@
             </div>
           </details>
 
+        </div>
+      </section>
+
+      <!-- Kategóriák Szekció (Admin only) -->
+      <section id="categories-section" class="section hidden" data-role="admin">
+        <div class="section-header">
+          <h2>🏷️ Kategóriák Beállítása</h2>
+          <div class="section-actions">
+            <button id="auto-categorize-btn" class="cta-button" style="background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 100%);">✨ Automatikus Kategorizálás</button>
+          </div>
+        </div>
+        
+        <div class="glass-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+          <p style="color: var(--color-subtext); margin-bottom: 1.5rem; font-size: 0.95rem;">
+            Itt módosíthatod, hogy melyik kategóriának mi legyen a neve, az ikonja, és hogy **hány darabnál jelezzen a rendszer, hogy kifogyóban van**.
+          </p>
+          <div style="overflow-x:auto;">
+            <table class="glass-table" id="categories-table">
+              <thead>
+                <tr>
+                  <th>Szint</th>
+                  <th>Ikon</th>
+                  <th>Kategória Név</th>
+                  <th>Kritikus Készlet (db)</th>
+                  <th>Művelet</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- JS tölti fel -->
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -395,11 +416,7 @@
           <div class="form-row">
             <label for="edit-item-category">Kategória:</label>
             <select id="edit-item-category" class="styled-input">
-              <option value="A">🏆 Top nevek (A)</option>
-              <option value="B">📈 Jól veszik (B)</option>
-              <option value="C" selected>😐 Úgy ne (C)</option>
-              <option value="D">🐌 Ritkán keresett (D)</option>
-              <option value="E">😭 Vesztesek (E)</option>
+              <!-- JS tölti fel -->
             </select>
           </div>
           <div class="form-row">
@@ -468,6 +485,6 @@
       </div>
     </div>
 
-    <script defer src="js/app.js?v=18"></script>
+    <script defer src="js/app.js?v=19"></script>
 </body>
 </html>
