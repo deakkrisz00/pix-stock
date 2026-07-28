@@ -1,5 +1,5 @@
 // Service Worker – Pix Stock PWA v2
-const CACHE_NAME = 'pix-stock-v10';
+const CACHE_NAME = 'pix-stock-v11';
 const STATIC_ASSETS = [
   './',
   './index.html',

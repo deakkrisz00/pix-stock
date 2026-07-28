@@ -86,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (id === "stats-section") loadStats();
     if (id === "admin-log-section") loadAdminLog();
     if (id === "osszeiras-log-section") loadOsszeirasLog();
+    if (id === "import-log-section") loadImportLog();
   }
   navItems.forEach(item => {
     item.addEventListener("pointerup", (e) => {
@@ -1169,6 +1170,105 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshOsszeirasLogBtn?.addEventListener('pointerup', e => { e.preventDefault(); loadOsszeirasLog(); });
 
 
+  // ── IMPORT LOG SECTION ─────────────────────────────────────
+  const refreshImportLogBtn = document.getElementById("refresh-import-log");
+  const importLogTableBody = document.querySelector("#import-log-table tbody");
+
+  async function loadImportLog() {
+    if (!importLogTableBody) return;
+    importLogTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--color-subtext);">⏳ Betöltés...</td></tr>`;
+    const { data, error } = await supabaseClient
+      .from('transactions')
+      .select('*')
+      .eq('type', 'feltoltes')
+      .order('created_at', { ascending: false })
+      .limit(100);
+      
+    if (error) {
+      importLogTableBody.innerHTML = `<tr><td colspan="4" style="color:#f87171;">Hiba: ${error.message}</td></tr>`;
+      return;
+    }
+    importLogTableBody.innerHTML = "";
+    if (!data || data.length === 0) {
+      importLogTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--color-subtext);">Nincs bejegyzés</td></tr>`;
+      return;
+    }
+    
+    data.forEach(rec => {
+      const items = Array.isArray(rec.items) ? rec.items : [];
+      const totalItems = items.length;
+
+      const mainTr = document.createElement('tr');
+      mainTr.className = 'log-main-row';
+      mainTr.innerHTML = `
+        <td>${new Date(rec.created_at).toLocaleString('hu-HU')}</td>
+        <td>${rec.user_name || '–'}</td>
+        <td>${rec.booth || 'Excel'}</td>
+        <td><strong>${totalItems} fajta</strong> <span class="cta-button secondary" style="float:right; padding:0.2rem 0.5rem; font-size:0.8rem; cursor:pointer;">Részletek ▼</span></td>
+      `;
+
+      const detailsTr = document.createElement('tr');
+      detailsTr.className = 'log-details-row';
+      
+      const itemsHtml = items.map((item) => `
+        <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
+          <div>
+            <span>${item.name}</span>
+            <span class="log-qty-badge" style="margin-left:0.5rem; background:rgba(99, 102, 241, 0.15); color:var(--color-accent);">${item.old_stock ?? '?'} ➔ ${item.new_stock ?? '?'} db</span>
+          </div>
+        </li>
+      `).join('');
+
+      detailsTr.innerHTML = `
+        <td colspan="4" style="padding: 0;">
+          <div class="log-details-content">
+            <ul style="list-style:none; padding:0; margin:0;">${itemsHtml}</ul>
+            <div style="margin-top: 1rem; text-align: right;">
+              <button class="cta-button undo-import-btn" style="background:#ef4444; padding:0.4rem 1rem; font-size:0.85rem;">⏪ Import Visszavonása</button>
+            </div>
+          </div>
+        </td>
+      `;
+
+      const undoBtn = detailsTr.querySelector('.undo-import-btn');
+      undoBtn.addEventListener('pointerup', async (e) => {
+        e.stopPropagation();
+        if (!confirm("Biztosan visszavonod ezt az importálást?\\nA tételek készlete visszaáll az importálás előtti állapotra!")) return;
+        
+        try {
+          // Revert stock for each item
+          for (const item of items) {
+            if (item.old_stock !== undefined) {
+               const { error: updErr } = await supabaseClient.from('names').update({ central_stock: item.old_stock }).eq('name', item.name);
+               if (updErr) throw updErr;
+            }
+          }
+          // Delete transaction
+          const { error: delErr } = await supabaseClient.from('transactions').delete().eq('id', rec.id);
+          if (delErr) throw delErr;
+          
+          alert("Importálás sikeresen visszavonva!");
+          loadImportLog();
+          loadAndRenderNames();
+        } catch(err) {
+          alert("Hiba: " + err.message);
+        }
+      });
+
+      mainTr.addEventListener("pointerup", (e) => {
+        e.preventDefault();
+        const isOpen = detailsTr.classList.contains("open");
+        document.querySelectorAll('#import-log-table .log-details-row.open').forEach(row => row.classList.remove('open'));
+        if (!isOpen) detailsTr.classList.add("open");
+      });
+
+      importLogTableBody.appendChild(mainTr);
+      importLogTableBody.appendChild(detailsTr);
+    });
+  }
+  
+  refreshImportLogBtn?.addEventListener('pointerup', e => { e.preventDefault(); loadImportLog(); });
+
   // ── NEVEK / KÉSZLET (names tábla) ────────────────────────────
   async function fetchNames() {
     const { data, error } = await supabaseClient
@@ -1687,9 +1787,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // For names, ignoreDup is false so it updates central_stock. For pens, ignoreDup is true.
     const ignoreDup = importTarget === "pens";
 
+    const logItems = [];
     const finalRecords = parsedRecords
       .filter(r => !r._noChange) // Add módban szám nélküli nevek → nem módosítjuk
       .map(r => {
+        if (r.new_stock !== undefined) {
+          logItems.push({ name: r.name, old_stock: r.old_stock, new_stock: r.new_stock });
+        }
         const copy = { ...r };
         delete copy.old_stock;  // Ideiglenes UI prop
         delete copy._noChange;  // Ideiglenes jelölő
@@ -1711,6 +1815,20 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error(error);
     } else {
       closeModal();
+      if (importTarget === "names" && logItems.length > 0) {
+        const mode = document.querySelector('input[name="import_mode"]:checked')?.value || "add";
+        const { error: txErr } = await supabaseClient.from('transactions').insert({
+          type: 'feltoltes',
+          booth: 'kozponti',
+          user_name: currentUser || currentRole,
+          items: logItems,
+          notes: mode === 'add' ? 'Excel import: Beérkező áru' : 'Excel import: Kezdő leltár'
+        });
+        if (txErr) {
+          console.error("Hiba a tranzakció mentésekor:", txErr);
+          alert("Figyelem: A készlet frissült, de a naplózás nem sikerült! Hiba: " + txErr.message);
+        }
+      }
       if (importTarget === "names") {
         loadAndRenderNames();
         loadShortageNames(); // Refresh shortage table as well
