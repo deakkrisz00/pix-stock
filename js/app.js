@@ -850,7 +850,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const { data: namesData, error: namesError } = await supabaseClient
       .from('names')
-      .select('name, central_stock, category');
+      .select('name, central_stock, category, bazar_stock, fenti_stock');
 
     if (txError || namesError) {
       console.error(txError, namesError);
@@ -887,8 +887,10 @@ document.addEventListener("DOMContentLoaded", () => {
       
       const cat = n.category || 'C';
       const limit = categoryThresholds[cat] || 0;
+      const rackShortage = (parseInt(n.bazar_stock, 10) || 0) + (parseInt(n.fenti_stock, 10) || 0);
+
       if (s < limit) {
-        stockList.push({ name: n.name, stock: s, limit: limit, diff: s - limit });
+        stockList.push({ name: n.name, stock: s, limit: limit, diff: s - limit, rackShortage: rackShortage });
       }
     });
 
@@ -911,7 +913,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Sort by how far below the limit they are (most critical first)
-    stockList.sort((a, b) => a.diff - b.diff);
+    // Ha ugyanannyira vannak a limit alatt, akkor az állvány hiány (rackShortage) alapján csökkenőbe
+    stockList.sort((a, b) => {
+      if (a.diff !== b.diff) return a.diff - b.diff;
+      return b.rackShortage - a.rackShortage;
+    });
     if (lowStockTableBody) {
       lowStockTableBody.innerHTML = "";
       const lowestStock = stockList; // Mutatjuk az összes kritikust, nem csak az első 15-öt
