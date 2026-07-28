@@ -57,15 +57,17 @@
             <button id="add-item" class="cta-button">+ Új tétel</button>
             <button id="import-inventory-btn" class="cta-button secondary">📥 Excel import</button>
             <input type="file" id="import-inventory-file" accept=".xlsx,.xls,.csv" hidden />
+            <button id="export-inventory-btn" class="cta-button secondary">📤 Excel export</button>
             
             <button id="delete-all-names" class="cta-button danger" data-role="admin">🗑️ Minden törlése</button>
           </div>
         </div>
+
         <table class="glass-table" id="inventory-table">
           <thead>
             <tr>
-              <th>Toll neve</th>
-              <th>Raktáron</th>
+              <th data-sort="string" style="cursor: pointer; user-select: none;">Toll neve ↕️</th>
+              <th data-sort="number" style="cursor: pointer; user-select: none;">Raktáron ↕️</th>
               <th>Bazár / Krisztián hiány</th>
               <th>Akció</th>
             </tr>
@@ -124,6 +126,15 @@
         <div class="section-header">
           <h2>Rendelés Export</h2>
           <div class="section-actions">
+            <select class="styled-select category-filter-select">
+              <option value="ALL">Minden kategória</option>
+              <option value="CRITICAL">⚠️ Csak a kritikus készletűek</option>
+              <option value="A">🏆 Top nevek (A)</option>
+              <option value="B">📈 Jól veszik (B)</option>
+              <option value="C">😐 Úgy ne (C)</option>
+              <option value="D">🐌 Ritkán keresett (D)</option>
+              <option value="E">😭 Vesztesek (E)</option>
+            </select>
             <button id="export-order-btn" class="cta-button">📥 Excel Export</button>
           </div>
         </div>
@@ -131,6 +142,7 @@
           <thead>
             <tr>
               <th>Toll neve</th>
+              <th>Kategória</th>
               <th>Raktáron</th>
               <th>Rendelés mennyisége</th>
             </tr>
@@ -144,12 +156,21 @@
         <div class="section-header">
           <h2>📊 Statisztika</h2>
           <div class="section-actions">
+            <select class="styled-select category-filter-select">
+              <option value="ALL">Minden kategória</option>
+              <option value="CRITICAL">⚠️ Csak a kritikus készletűek</option>
+              <option value="A">🏆 Top nevek (A)</option>
+              <option value="B">📈 Jól veszik (B)</option>
+              <option value="C">Úgy ne 😐 (C)</option>
+              <option value="D">🐌 Ritkán keresett (D)</option>
+              <option value="E">😭 Vesztesek (E)</option>
+            </select>
             <select id="stats-period" class="styled-select">
               <option value="7">Utolsó 7 nap</option>
               <option value="30" selected>Utolsó 30 nap</option>
               <option value="90">Utolsó 90 nap</option>
             </select>
-            <button id="refresh-stats" class="cta-button secondary">🔄 Frissít</button>
+            <button id="refresh-stats" class="cta-button">Frissítés</button>
           </div>
         </div>
         
@@ -157,27 +178,33 @@
         <div id="stats-cards" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-bottom:1.5rem;"></div>
         
         <!-- Táblázatok -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:1.5rem;">
+        <div style="display:flex; flex-direction:column; gap:1.5rem;">
           
-          <div>
-            <h3 style="margin:0 0 0.8rem; font-size:1rem; color:#f87171;">⚠️ Kifogyóban (Központi raktár)</h3>
-            <div style="overflow-x:auto;">
+          <details class="glass-card" style="padding:0;">
+            <summary style="margin:0; padding:1rem 1.5rem; font-size:1rem; color:#f87171; cursor:pointer; font-weight:bold; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+              <span>⚠️ Kifogyóban (Központi raktár)</span>
+              <span class="details-arrow">▼</span>
+            </summary>
+            <div style="padding:0 1.5rem 1.5rem 1.5rem; overflow-x:auto;">
               <table class="glass-table" id="low-stock-table">
                 <thead><tr><th>Toll neve</th><th style="text-align:center;">Készlet (db)</th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
-          </div>
+          </details>
 
-          <div>
-            <h3 style="margin:0 0 0.8rem; font-size:1rem; color:#34d399;">🔥 Legjobban fogyó (Toplista)</h3>
-            <div style="overflow-x:auto;">
+          <details class="glass-card" style="padding:0;">
+            <summary style="margin:0; padding:1rem 1.5rem; font-size:1rem; color:#34d399; cursor:pointer; font-weight:bold; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+              <span>🔥 Legjobban fogyó (Toplista)</span>
+              <span class="details-arrow">▼</span>
+            </summary>
+            <div style="padding:0 1.5rem 1.5rem 1.5rem; overflow-x:auto;">
               <table class="glass-table" id="stats-table">
                 <thead><tr><th>Toll neve</th><th style="text-align:center;">Kivitt (db)</th></tr></thead>
                 <tbody></tbody>
               </table>
             </div>
-          </div>
+          </details>
 
         </div>
       </section>
@@ -366,6 +393,16 @@
           </div>
 
           <div class="form-row">
+            <label for="edit-item-category">Kategória:</label>
+            <select id="edit-item-category" class="styled-input">
+              <option value="A">🏆 Top nevek (A)</option>
+              <option value="B">📈 Jól veszik (B)</option>
+              <option value="C" selected>😐 Úgy ne (C)</option>
+              <option value="D">🐌 Ritkán keresett (D)</option>
+              <option value="E">😭 Vesztesek (E)</option>
+            </select>
+          </div>
+          <div class="form-row">
             <label for="edit-item-bazar">Bazár hiányzik (db):</label>
             <input type="number" id="edit-item-bazar" class="styled-input" />
           </div>
@@ -431,6 +468,6 @@
       </div>
     </div>
 
-    <script src="js/app.js?v=7"></script>
+    <script defer src="js/app.js?v=16"></script>
 </body>
 </html>

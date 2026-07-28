@@ -185,18 +185,51 @@ document.addEventListener("DOMContentLoaded", () => {
     applyRoleVisibility();
   });
 
-  // ── GLOBAL SEARCH ───────────────────────────────────────────
+  // ── GLOBAL SEARCH ÉS SZŰRÉS ───────────────────────────────
   const globalSearchInput = document.getElementById("global-search-input");
+  const categoryFilters = document.querySelectorAll(".category-filter-select");
+  
+  const categoryThresholds = {
+    "A": 15,
+    "B": 10,
+    "C": 5,
+    "D": 3,
+    "E": 0
+  };
+  
+  let currentFilterMode = "ALL";
+
+  categoryFilters.forEach(select => {
+    select.addEventListener("change", (e) => {
+      currentFilterMode = e.target.value;
+      // Szinkronizáljuk a többi legördülőt is
+      categoryFilters.forEach(s => { if (s !== e.target) s.value = currentFilterMode; });
+      applyGlobalSearchFilter();
+    });
+  });
   
   function applyGlobalSearchFilter() {
-    if (!globalSearchInput) return;
-    const term = globalSearchInput.value.toLowerCase();
+    const term = globalSearchInput ? globalSearchInput.value.toLowerCase() : "";
+    const filterMode = currentFilterMode;
     
     const tablesToFilter = ["#inventory-table", "#shortage-table", "#pens-table", "#order-table"];
     tablesToFilter.forEach(tableSelector => {
       document.querySelectorAll(`${tableSelector} tbody tr`).forEach(tr => {
         const name = tr.dataset.name?.toLowerCase() || tr.firstElementChild?.textContent.toLowerCase() || "";
-        if (name.startsWith(term)) {
+        const cat = tr.dataset.category || "C";
+        const stock = parseInt(tr.dataset.stock, 10) || 0;
+        
+        let showByName = name.startsWith(term);
+        let showByCat = true;
+        
+        if (filterMode === "CRITICAL") {
+          const limit = categoryThresholds[cat] || 0;
+          if (stock >= limit) showByCat = false;
+        } else if (filterMode !== "ALL") {
+          if (cat !== filterMode) showByCat = false;
+        }
+        
+        if (showByName && showByCat) {
           tr.style.display = "";
         } else {
           tr.style.display = "none";
@@ -244,6 +277,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const tr = document.createElement("tr");
       tr.dataset.name = item.name;
       tr.dataset.central = item.central_stock || 0;
+      tr.dataset.category = item.category || 'C';
+      tr.dataset.stock = item.central_stock || 0;
       
       const pendingShortage = item[boothField] || 0;
       tr.dataset.pending = pendingShortage;
@@ -434,12 +469,22 @@ document.addEventListener("DOMContentLoaded", () => {
       const tr = document.createElement("tr");
       tr.dataset.name = item.name;
       const stock = item.central_stock || 0;
+      tr.dataset.stock = stock;
+      tr.dataset.category = item.category || 'C';
       const bazar = item.bazar_stock || 0;
       const fenti = item.fenti_stock || 0;
       
       let stockStyle = '';
       if (stock === 0) stockStyle = 'style="color:#f87171; font-weight:bold;"';
       else if (stock < 0) stockStyle = 'class="negative-stock"';
+
+      const cat = item.category || 'C';
+      let catIcon = '';
+      if (cat === 'A') catIcon = '🏆 (A)';
+      if (cat === 'B') catIcon = '📈 (B)';
+      if (cat === 'C') catIcon = 'Úgy ne 😐 (C)';
+      if (cat === 'D') catIcon = '🐌 (D)';
+      if (cat === 'E') catIcon = '😭 (E)';
 
       tr.innerHTML = `
         <td>
@@ -449,6 +494,7 @@ document.addEventListener("DOMContentLoaded", () => {
             Krisztián: <span style="font-weight:${fenti > 0 ? 'bold' : 'normal'}; color:${fenti > 0 ? '#f87171' : 'inherit'}">${fenti > 0 ? fenti + ' db' : '0 db'}</span>
           </div>
         </td>
+        <td style="font-size: 0.85rem; color: var(--color-subtext); text-align: center;">${catIcon}</td>
         <td ${stockStyle} style="text-align: center; font-size: 1.1rem;">${stock}</td>
         <td>
           <div class="qty-wrap" style="align-items: center; justify-content: center;">
@@ -804,7 +850,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const { data: namesData, error: namesError } = await supabaseClient
       .from('names')
-      .select('name, central_stock');
+      .select('name, central_stock, category');
 
     if (txError || namesError) {
       console.error(txError, namesError);
@@ -838,7 +884,12 @@ document.addEventListener("DOMContentLoaded", () => {
     (namesData || []).forEach(n => {
       const s = parseInt(n.central_stock, 10) || 0;
       totalCentralStock += s;
-      stockList.push({ name: n.name, stock: s });
+      
+      const cat = n.category || 'C';
+      const limit = categoryThresholds[cat] || 0;
+      if (s < limit) {
+        stockList.push({ name: n.name, stock: s, limit: limit, diff: s - limit });
+      }
     });
 
     if (statsCardsContainer) {
@@ -859,22 +910,22 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     }
 
-    stockList.sort((a, b) => a.stock - b.stock);
+    // Sort by how far below the limit they are (most critical first)
+    stockList.sort((a, b) => a.diff - b.diff);
     if (lowStockTableBody) {
       lowStockTableBody.innerHTML = "";
-      const lowestStock = stockList.slice(0, 15);
+      const lowestStock = stockList; // Mutatjuk az összes kritikust, nem csak az első 15-öt
       if (lowestStock.length === 0) {
-        lowStockTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--color-subtext);">Nincs adat</td></tr>`;
+        lowStockTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--color-subtext);">Nincs kritikus készletű tétel! 🎉</td></tr>`;
       } else {
         lowestStock.forEach(item => {
-          let color = 'var(--color-text)';
+          let color = '#fbbf24';
           if (item.stock === 0) color = '#f87171';
-          else if (item.stock < 10) color = '#fbbf24';
           
           lowStockTableBody.innerHTML += `
             <tr>
               <td>${item.name}</td>
-              <td style="text-align:center; font-weight:bold; color:${color};">${item.stock}</td>
+              <td style="text-align:center; font-weight:bold; color:${color};">${item.stock} / ${item.limit}</td>
             </tr>
           `;
         });
@@ -1273,7 +1324,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function fetchNames() {
     const { data, error } = await supabaseClient
       .from("names")
-      .select("id, name, central_stock, bazar_stock, fenti_stock, is_active")
+      .select("id, name, central_stock, bazar_stock, fenti_stock, is_active, category")
       .order("name", { ascending: true });
     if (error) { console.error("fetchNames:", error); return []; }
     return data;
@@ -1318,6 +1369,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (stock === 0) stockStyle = 'style="color:#f87171; font-weight:bold;"';
     else if (stock < 0) stockStyle = 'class="negative-stock"';
     
+    // Kategória ikon és kritikus szint jelzés
+    const cat = item.category || 'C';
+    let catIcon = '';
+    if (cat === 'A') catIcon = '🏆 (A)';
+    if (cat === 'B') catIcon = '📈 (B)';
+    if (cat === 'C') catIcon = 'Úgy ne 😐 (C)';
+    if (cat === 'D') catIcon = '🐌 (D)';
+    if (cat === 'E') catIcon = '😭 (E)';
+    
+    // Szűrés támogatáshoz beállítjuk a data attribútumokat
+    tr.dataset.category = cat;
+    tr.dataset.stock = stock;
+    
     tr.innerHTML = `
       <td>${item.name}</td>
       <td ${stockStyle}>${stock}</td>
@@ -1341,6 +1405,44 @@ document.addEventListener("DOMContentLoaded", () => {
     applyGlobalSearchFilter();
   }
 
+  // ── KÉSZLET TÁBLÁZAT RENDEZÉS ───────────────────────────────
+  const inventoryHeaders = document.querySelectorAll("#inventory-table th[data-sort]");
+  inventoryHeaders.forEach(th => {
+    th.addEventListener("pointerup", () => {
+      const type = th.dataset.sort;
+      const isAsc = th.dataset.asc === "true";
+      
+      // Reset all arrows
+      inventoryHeaders.forEach(h => {
+        h.dataset.asc = "";
+        h.textContent = h.textContent.replace(" ⬇️", " ↕️").replace(" ⬆️", " ↕️");
+      });
+
+      // Set new direction
+      th.dataset.asc = (!isAsc).toString();
+      th.textContent = th.textContent.replace(" ↕️", !isAsc ? " ⬆️" : " ⬇️");
+
+      const rows = Array.from(namesTableBody.querySelectorAll("tr"));
+      
+      rows.sort((a, b) => {
+        let valA, valB;
+        if (type === "string") {
+          valA = a.firstElementChild.textContent.trim().toLowerCase();
+          valB = b.firstElementChild.textContent.trim().toLowerCase();
+          return !isAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        } else if (type === "number") {
+          // A 2. oszlop a raktárkészlet
+          valA = parseInt(a.dataset.stock, 10) || 0;
+          valB = parseInt(b.dataset.stock, 10) || 0;
+          return !isAsc ? valA - valB : valB - valA;
+        }
+      });
+
+      namesTableBody.innerHTML = "";
+      rows.forEach(row => namesTableBody.appendChild(row));
+    });
+  });
+
   function addName() {
     const name = prompt("Toll neve:");
     if (!name) return;
@@ -1354,6 +1456,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const editCentralInput = document.getElementById("edit-item-central");
   const editBazarInput = document.getElementById("edit-item-bazar");
   const editFentiInput = document.getElementById("edit-item-fenti");
+  const editCategoryInput = document.getElementById("edit-item-category");
 
   document.getElementById("edit-item-close")?.addEventListener("pointerup", closeEditModal);
   document.getElementById("edit-item-cancel")?.addEventListener("pointerup", closeEditModal);
@@ -1369,6 +1472,7 @@ document.addEventListener("DOMContentLoaded", () => {
     editCentralInput.value = item.central_stock || 0;
     editBazarInput.value = item.bazar_stock || 0;
     editFentiInput.value = item.fenti_stock || 0;
+    if (editCategoryInput) editCategoryInput.value = item.category || "C";
     
     editModal.classList.remove("hidden");
   }
@@ -1384,13 +1488,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const stock = parseInt(editCentralInput.value, 10) || 0;
     const bazar = parseInt(editBazarInput.value, 10) || 0;
     const fenti = parseInt(editFentiInput.value, 10) || 0;
+    const cat = editCategoryInput ? editCategoryInput.value : "C";
 
     const { error } = await supabaseClient.from("names")
       .update({ 
         name: newName, 
         central_stock: stock, 
         bazar_stock: bazar,
-        fenti_stock: fenti
+        fenti_stock: fenti,
+        category: cat
       })
       .eq("id", id);
 
@@ -1512,6 +1618,58 @@ document.addEventListener("DOMContentLoaded", () => {
   importInventoryBtn?.addEventListener("pointerup", (e) => {
     e.preventDefault(); importTarget = "names"; importInventoryFile.value = ""; importInventoryFile.click();
   });
+  
+  document.getElementById("export-inventory-btn")?.addEventListener("pointerup", async (e) => {
+    e.preventDefault();
+    if (typeof XLSX === "undefined") {
+      alert("A SheetJS még töltődik be, kérlek várj...");
+      return;
+    }
+    
+    const { data: names, error } = await supabaseClient
+      .from("names")
+      .select("name, central_stock, bazar_stock, fenti_stock")
+      .order("name", { ascending: true });
+      
+    if (error) {
+      alert("Hiba a készlet letöltésekor: " + error.message);
+      return;
+    }
+    
+    if (!names || names.length === 0) {
+      alert("A készlet üres, nincs mit exportálni!");
+      return;
+    }
+
+    const dataMatrix = [
+      ["Toll neve", "Központi készlet", "Bazár", "Krisztián"]
+    ];
+
+    names.forEach(item => {
+      dataMatrix.push([
+        item.name,
+        item.central_stock || 0,
+        item.bazar_stock || 0,
+        item.fenti_stock || 0
+      ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(dataMatrix);
+    
+    ws['!cols'] = [
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 15 },
+      { wch: 15 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Készlet");
+    
+    const dateStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `Keszlet_Export_${dateStr}.xlsx`);
+  });
+
   importPensBtn?.addEventListener("pointerup", (e) => {
     e.preventDefault(); importTarget = "pens"; importPensFile.value = ""; importPensFile.click();
   });
@@ -1814,8 +1972,11 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Hiba az importálás során:\n" + error.message);
       console.error(error);
     } else {
-      closeModal();
-      if (importTarget === "names" && logItems.length > 0) {
+      // Mentsük le a változókat mielőtt a closeModal() törölné őket!
+      const target = importTarget;
+      const count = parsedRecords.length;
+      
+      if (target === "names" && logItems.length > 0) {
         const mode = document.querySelector('input[name="import_mode"]:checked')?.value || "add";
         const { error: txErr } = await supabaseClient.from('transactions').insert({
           type: 'feltoltes',
@@ -1829,13 +1990,16 @@ document.addEventListener("DOMContentLoaded", () => {
           alert("Figyelem: A készlet frissült, de a naplózás nem sikerült! Hiba: " + txErr.message);
         }
       }
-      if (importTarget === "names") {
+      
+      if (target === "names") {
         loadAndRenderNames();
         loadShortageNames(); // Refresh shortage table as well
       } else {
         loadAndRenderPens();
       }
-      alert(`✅ Sikeresen importálva: ${parsedRecords.length} rekord.`);
+      
+      alert(`✅ Sikeresen importálva: ${count} rekord.`);
+      closeModal();
     }
     modalImport.disabled = false;
     modalImport.textContent = "✅ Importálás";
