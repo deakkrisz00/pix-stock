@@ -302,6 +302,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     names.forEach(item => {
       const tr = document.createElement("tr");
+      tr.dataset.id = item.id;
       tr.dataset.name = item.name;
       tr.dataset.central = item.central_stock || 0;
       tr.dataset.category = item.category || 'C';
@@ -548,7 +549,8 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.addEventListener("pointerup", e => {
           e.preventDefault();
           const add = parseInt(btn.dataset.add, 10);
-          input.value = add;
+          const currentVal = parseInt(input.value, 10) || 0;
+          input.value = currentVal + add;
           updateInputStyle();
         });
       });
@@ -593,55 +595,62 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Mátrix generálás (30 sor / oszlop páros)
+    // Excel export (just UI download, not saving to DB)
     const ROWS_PER_COL = 30;
     const matrix = [];
-    
-    // Először legeneráljuk a 30 üres sort
-    for (let i = 0; i < ROWS_PER_COL; i++) {
-      matrix.push([]);
-    }
-
-    // Beletöltjük az adatokat oszloponként
+    for (let i = 0; i < ROWS_PER_COL; i++) matrix.push([]);
     for (let i = 0; i < dataList.length; i++) {
       const rowIdx = i % ROWS_PER_COL;
       const colGroupIdx = Math.floor(i / ROWS_PER_COL);
-      
       const item = dataList[i];
-      
-      // Padolni kell a sort, ha még nincs elég oszlop benne
       while (matrix[rowIdx].length < colGroupIdx * 2) {
         matrix[rowIdx].push("");
       }
-      
       matrix[rowIdx].push(item.name);
       matrix[rowIdx].push(item.orderStr);
     }
-
-    // Worksheet létrehozás (fejléc nélkül)
     const ws = XLSX.utils.aoa_to_sheet(matrix);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Rendelés");
-    
-    // Fájl mentés
     const dateStr = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `Rendeles_Export_${dateStr}.xlsx`);
+  });
 
-    // ── ADATBÁZIS MENTÉS ───────────────────────────────────────
+  const saveOrderBtn = document.getElementById("save-order-btn");
+  const saveOrderNote = document.getElementById("save-order-note");
+
+  saveOrderBtn?.addEventListener("pointerup", async (e) => {
+    e.preventDefault();
+    const rows = orderTableBody.querySelectorAll("tr");
+    const orderedItems = [];
+    
+    for (const row of rows) {
+      const name = row.dataset.name;
+      const qtyStr = row.querySelector('.order-qty-input').value;
+      const qty = parseInt(qtyStr, 10) || 0;
+      if (qty > 0) orderedItems.push({ name, qty });
+    }
+
+    if (orderedItems.length === 0) {
+      alert("Nincs mit menteni! Kérlek adj meg legalább egy rendelési mennyiséget.");
+      return;
+    }
+
+    const note = saveOrderNote.value.trim();
+    saveOrderBtn.textContent = '⏳ Mentés...';
+    
     try {
-      const { error: logErr } = await supabaseClient
-        .from('transactions')
-        .insert([{
-          type: 'rendeles',
-          booth: 'admin',
-          user_name: currentUser || 'Admin',
-          items: orderedItems
-        }]);
+      const { error } = await supabaseClient.from('orders').insert([{
+        note: note || null,
+        items: orderedItems
+      }]);
 
-      if (logErr) {
-        console.error("Hiba a rendelés mentésekor:", logErr);
+      if (error) {
+        console.error("Hiba a rendelés mentésekor:", error);
+        alert("Hiba a mentéskor!");
       } else {
-        // Töröljük a beírt adatokat a sikeres export után
+        alert("Rendelés sikeresen mentve!");
+        saveOrderNote.value = "";
         rows.forEach(row => {
           const input = row.querySelector('.order-qty-input');
           if (input) {
@@ -649,12 +658,88 @@ document.addEventListener("DOMContentLoaded", () => {
             input.classList.remove('qty-input-active');
           }
         });
-        loadAdminLog(); // frissítsük a naplót a háttérben
+        loadSavedOrders();
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      saveOrderBtn.innerHTML = '💾 Rendelés Mentése';
     }
   });
+
+  // Saved orders UI logic
+  const currentOrdersView = document.getElementById("current-orders-view");
+  const savedOrdersView = document.getElementById("saved-orders-view");
+  const savedOrdersTableBody = document.querySelector("#saved-orders-table tbody");
+
+  document.querySelectorAll('.order-tab-btn').forEach(btn => {
+    btn.addEventListener('pointerup', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('.order-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.target;
+      if (target === 'current-orders-view') {
+        currentOrdersView.classList.remove('hidden');
+        savedOrdersView.classList.add('hidden');
+      } else {
+        currentOrdersView.classList.add('hidden');
+        savedOrdersView.classList.remove('hidden');
+        loadSavedOrders();
+      }
+    });
+  });
+
+  async function loadSavedOrders() {
+    if (!savedOrdersTableBody) return;
+    savedOrdersTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">⏳ Betöltés...</td></tr>';
+    
+    const { data, error } = await supabaseClient.from('orders').select('*').order('created_at', { ascending: false });
+    if (error) {
+      savedOrdersTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#ef4444;">Hiba a betöltéskor!</td></tr>';
+      return;
+    }
+    
+    if (!data || data.length === 0) {
+      savedOrdersTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--color-subtext);">Nincsenek mentett rendelések.</td></tr>';
+      return;
+    }
+
+    savedOrdersTableBody.innerHTML = '';
+    data.forEach(order => {
+      const dateStr = new Date(order.created_at).toLocaleString('hu-HU');
+      const nameStr = order.note ? `<br><span style="color:var(--color-accent); font-weight:bold;">${order.note}</span>` : '';
+      const items = order.items || [];
+      const itemsCount = items.length;
+      
+      const itemsListHtml = items.map(i => `<span style="display:inline-block; padding:0.2rem 0.5rem; margin:0.2rem; background:rgba(255,255,255,0.1); border-radius:12px; font-size:0.8rem;">${i.name}: <b style="color:var(--color-primary);">${i.qty} db</b></span>`).join('');
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${dateStr}${nameStr}</td>
+        <td>
+          <details style="font-size:0.85rem;">
+            <summary style="cursor:pointer; color:var(--color-accent); outline:none; user-select:none;">${itemsCount} féle toll ▼</summary>
+            <div style="margin-top:0.5rem; max-height:200px; overflow-y:auto; padding:0.5rem; background:rgba(0,0,0,0.2); border-radius:8px;" class="custom-scrollbar">
+              ${itemsListHtml}
+            </div>
+          </details>
+        </td>
+        <td style="text-align:center;">
+          <button class="cta-button del-order-btn" style="background:#ef4444; border:none; padding:0.4rem 0.8rem; font-size:0.85rem;">❌ Törlés</button>
+        </td>
+      `;
+
+      tr.querySelector('.del-order-btn').addEventListener('pointerup', async (e) => {
+        e.preventDefault();
+        if (confirm('Biztosan törlöd ezt a mentett rendelést?')) {
+          await supabaseClient.from('orders').delete().eq('id', order.id);
+          loadSavedOrders();
+        }
+      });
+
+      savedOrdersTableBody.appendChild(tr);
+    });
+  }
 
 
   // Summary Modal Elements
@@ -734,6 +819,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let hasChanges = false;
     for (const row of rows) {
+      const id = row.dataset.id;
       const name = row.dataset.name;
       const centralStock = parseInt(row.dataset.central, 10) || 0;
       const newShortageReq = parseInt(row.querySelector('.shortage-qty-input').value, 10) || 0;
@@ -742,6 +828,7 @@ document.addEventListener("DOMContentLoaded", () => {
       hasChanges = true;
 
       pendingShortageUpdates.push({ 
+        id,
         name, 
         newShortageReq, 
         originalCentralStock: centralStock,
@@ -791,7 +878,20 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (correctionDiff && correctionDiff !== 0) {
-        korrekcioItems.push({ name, qty: correctionDiff });
+        korrekcioItems.push({ 
+          id: update.id,
+          name: name,
+          qty: Math.abs(correctionDiff),
+          delta_central: correctionDiff,
+          delta_bazar: 0,
+          delta_fenti: 0,
+          old_central: update.originalCentralStock,
+          new_central: update.currentCentralStock,
+          old_bazar: 0,
+          new_bazar: 0,
+          old_fenti: 0,
+          new_fenti: 0
+        });
       }
       
       // Update DB with exact calculated states
@@ -807,7 +907,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (korrekcioItems.length > 0) {
       await supabaseClient.from('transactions').insert({
         type: 'korrekcio',
-        booth: 'raktár', // Központi raktár
+        booth: 'mindketto', // CHECK constraint miatt: 'mindketto', 'kozponti', 'bazar', 'fenti'
         user_name: currentUser || currentRole,
         items: korrekcioItems,
         notes: 'Összeírás közben javított készlet'
@@ -984,6 +1084,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── ADMIN LOG SECTION ───────────────────────────────────────
   const refreshLogBtn = document.getElementById("refresh-log");
+  refreshLogBtn?.addEventListener('pointerup', () => {
+    if (currentAdminLogTab === 'leltar') {
+      loadOsszeirasLog();
+    } else {
+      loadAdminLog();
+    }
+  });
   const adminLogTableBody = document.querySelector("#admin-log-table tbody");
 
   async function deleteTransaction(rec) {
@@ -991,7 +1098,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!isConfirmed) return;
 
     try {
-      // Ha kivisz vagy visszahoz, akkor visszaállítjuk a készletet
       if (rec.type === 'kivisz' || rec.type === 'visszahoz') {
         const items = Array.isArray(rec.items) ? rec.items : [];
         for (const item of items) {
@@ -999,6 +1105,27 @@ document.addEventListener("DOMContentLoaded", () => {
           // Visszahoz esetén (qty pozitív a logban) -> hozzáadódott -> pozitívval hívjuk hogy levegye
           const reverseQty = rec.type === 'kivisz' ? -Math.abs(item.qty) : Math.abs(item.qty);
           await updateStock(item.name, rec.booth, reverseQty);
+        }
+      } else if (rec.type === 'korrekcio') {
+        const items = Array.isArray(rec.items) ? rec.items : [];
+        for (const item of items) {
+          const { data: currentStock, error: fetchErr } = await supabaseClient
+            .from('names')
+            .select('central_stock, bazar_stock, fenti_stock')
+            .eq('id', item.id)
+            .single();
+          
+          if (!fetchErr && currentStock) {
+            const newCentral = (currentStock.central_stock || 0) - (item.delta_central || 0);
+            const newBazar = (currentStock.bazar_stock || 0) - (item.delta_bazar || 0);
+            const newFenti = (currentStock.fenti_stock || 0) - (item.delta_fenti || 0);
+            
+            await supabaseClient.from('names').update({
+              central_stock: newCentral,
+              bazar_stock: newBazar,
+              fenti_stock: newFenti
+            }).eq('id', item.id);
+          }
         }
       }
 
@@ -1024,6 +1151,24 @@ document.addEventListener("DOMContentLoaded", () => {
       if (rec.type === 'kivisz' || rec.type === 'visszahoz') {
         const reverseQty = rec.type === 'kivisz' ? -Math.abs(item.qty) : Math.abs(item.qty);
         await updateStock(item.name, rec.booth, reverseQty);
+      } else if (rec.type === 'korrekcio') {
+        const { data: currentStock, error: fetchErr } = await supabaseClient
+          .from('names')
+          .select('central_stock, bazar_stock, fenti_stock')
+          .eq('id', item.id)
+          .single();
+          
+        if (!fetchErr && currentStock) {
+          const newCentral = (currentStock.central_stock || 0) - (item.delta_central || 0);
+          const newBazar = (currentStock.bazar_stock || 0) - (item.delta_bazar || 0);
+          const newFenti = (currentStock.fenti_stock || 0) - (item.delta_fenti || 0);
+          
+          await supabaseClient.from('names').update({
+            central_stock: newCentral,
+            bazar_stock: newBazar,
+            fenti_stock: newFenti
+          }).eq('id', item.id);
+        }
       }
 
       const newItems = [...rec.items];
@@ -1047,14 +1192,48 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  let currentAdminLogTab = 'kivitel';
+
+  document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+    btn.addEventListener('pointerup', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('.admin-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      currentAdminLogTab = btn.dataset.tab;
+      
+      const adminLogTable = document.getElementById('admin-log-table');
+      const osszeirasLogTable = document.getElementById('osszeiras-log-table');
+      
+      if (currentAdminLogTab === 'leltar') {
+        adminLogTable.classList.add('hidden');
+        osszeirasLogTable.classList.remove('hidden');
+        loadOsszeirasLog();
+      } else {
+        adminLogTable.classList.remove('hidden');
+        osszeirasLogTable.classList.add('hidden');
+        loadAdminLog();
+      }
+    });
+  });
+
   async function loadAdminLog() {
     adminLogTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--color-subtext);">⏳ Betöltés...</td></tr>`;
-    const { data, error } = await supabaseClient
+    
+    let query = supabaseClient
       .from('transactions')
       .select('*')
       .neq('type', 'osszeiras')
       .order('created_at', { ascending: false })
       .limit(200);
+
+    if (currentAdminLogTab === 'korrekcio') {
+      query = query.eq('type', 'korrekcio');
+    } else {
+      query = query.neq('type', 'korrekcio');
+    }
+
+    const { data, error } = await query;
     if (error) {
       adminLogTableBody.innerHTML = `<tr><td colspan="5" style="color:#f87171;">Hiba: ${error.message}</td></tr>`;
       console.error(error);
@@ -1070,11 +1249,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (rec.type === 'kivisz') typeLabel = '⬆️ Kivitt';
       else if (rec.type === 'visszahoz') typeLabel = '⬇️ Visszahozott';
       else if (rec.type === 'rendeles') typeLabel = '🛒 Rendelés';
+      else if (rec.type === 'korrekcio') typeLabel = '✏️ Kézi módosítás';
 
       let boothLabel = rec.booth;
       if (rec.booth === 'bazar') boothLabel = 'Bazár';
       else if (rec.booth === 'fenti') boothLabel = 'Krisztián';
       else if (rec.booth === 'admin') boothLabel = 'Export';
+      else if (rec.booth === 'mindketto') boothLabel = 'Több raktár';
       else if (!boothLabel) boothLabel = '–';
 
       const items = Array.isArray(rec.items) ? rec.items : [];
@@ -1096,15 +1277,34 @@ document.addEventListener("DOMContentLoaded", () => {
       const detailsTr = document.createElement('tr');
       detailsTr.className = 'log-details-row';
       
-      const itemsHtml = items.map((item, index) => `
-        <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
-          <div>
-            <span>${item.name}</span>
-            <span class="log-qty-badge" style="margin-left:0.5rem;">${item.qty} db</span>
-          </div>
-          <button class="cta-button del-single-item-btn" data-index="${index}" style="background:transparent; color:#ef4444; border:1px solid #ef4444; padding:0.1rem 0.4rem; font-size:0.75rem;">❌ Törlés</button>
-        </li>
-      `).join('');
+      const itemsHtml = items.map((item, index) => {
+        if (rec.type === 'korrekcio') {
+          let details = [];
+          if (item.delta_central) details.push(`Raktár: ${item.old_central} ➔ ${item.new_central} (${item.delta_central > 0 ? '+' : ''}${item.delta_central})`);
+          if (item.delta_bazar) details.push(`Bazár hiány: ${item.old_bazar} ➔ ${item.new_bazar} (${item.delta_bazar > 0 ? '+' : ''}${item.delta_bazar})`);
+          if (item.delta_fenti) details.push(`Fenti hiány: ${item.old_fenti} ➔ ${item.new_fenti} (${item.delta_fenti > 0 ? '+' : ''}${item.delta_fenti})`);
+          
+          return `
+            <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
+              <div>
+                <span>${item.name}</span>
+                <div style="font-size:0.8rem; color:var(--color-subtext); margin-top:0.2rem;">${details.join(' | ')}</div>
+              </div>
+              <button class="cta-button del-single-item-btn" data-index="${index}" style="background:transparent; color:#ef4444; border:1px solid #ef4444; padding:0.1rem 0.4rem; font-size:0.75rem;">❌ Törlés</button>
+            </li>
+          `;
+        } else {
+          return `
+            <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
+              <div>
+                <span>${item.name}</span>
+                <span class="log-qty-badge" style="margin-left:0.5rem;">${item.qty} db</span>
+              </div>
+              <button class="cta-button del-single-item-btn" data-index="${index}" style="background:transparent; color:#ef4444; border:1px solid #ef4444; padding:0.1rem 0.4rem; font-size:0.75rem;">❌ Törlés</button>
+            </li>
+          `;
+        }
+      }).join('');
 
       detailsTr.innerHTML = `
         <td colspan="5" style="padding: 0;">
@@ -1530,6 +1730,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const fenti = parseInt(editFentiInput.value, 10) || 0;
     const cat = editCategoryInput ? editCategoryInput.value : "C";
 
+    // 1. Lekérdezzük a régi értékeket
+    const { data: oldItem } = await supabaseClient.from("names").select("name, central_stock, bazar_stock, fenti_stock").eq("id", id).single();
+
+    // 2. Frissítjük a készletet
     const { error } = await supabaseClient.from("names")
       .update({ 
         name: newName, 
@@ -1544,6 +1748,35 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Hiba: " + error.message);
       console.error(error);
     } else {
+      // 3. Ha sikeres, és volt számszerű változás, naplózzuk
+      if (oldItem) {
+        const deltaCentral = stock - (oldItem.central_stock || 0);
+        const deltaBazar = bazar - (oldItem.bazar_stock || 0);
+        const deltaFenti = fenti - (oldItem.fenti_stock || 0);
+
+        if (deltaCentral !== 0 || deltaBazar !== 0 || deltaFenti !== 0) {
+          await supabaseClient.from("transactions").insert({
+            type: "korrekcio",
+            booth: "mindketto", // mindketto-t használunk, mert több raktárt is érinthet
+            user_name: currentUser || "Ismeretlen",
+            items: [{
+              id: id,
+              name: oldItem.name,
+              qty: Math.abs(deltaCentral) + Math.abs(deltaBazar) + Math.abs(deltaFenti), // pseudo qty
+              delta_central: deltaCentral,
+              delta_bazar: deltaBazar,
+              delta_fenti: deltaFenti,
+              old_central: oldItem.central_stock || 0,
+              new_central: stock,
+              old_bazar: oldItem.bazar_stock || 0,
+              new_bazar: bazar,
+              old_fenti: oldItem.fenti_stock || 0,
+              new_fenti: fenti
+            }]
+          });
+        }
+      }
+
       closeEditModal();
       loadAndRenderNames();
     }
@@ -2065,17 +2298,47 @@ document.addEventListener("DOMContentLoaded", () => {
   // ── CATEGORIES UI & AUTO-CATEGORIZE ───────────────────────────
   const categoriesTableBody = document.querySelector('#categories-table tbody');
   
-  function renderCategoriesTable() {
+  async function renderCategoriesTable() {
     if (!categoriesTableBody) return;
+    categoriesTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">⏳ Betöltés...</td></tr>';
+
+    const { data: allPens } = await supabaseClient.from('names').select('name, category').order('name');
+    const pensByCategory = {};
+    if (allPens) {
+      allPens.forEach(p => {
+        const cat = p.category || 'C';
+        if (!pensByCategory[cat]) pensByCategory[cat] = [];
+        pensByCategory[cat].push(p.name);
+      });
+    }
+
     categoriesTableBody.innerHTML = '';
     globalCategories.forEach(cat => {
+      const pensInCat = pensByCategory[cat.id] || [];
+      let pensHtml = `<div style="color:var(--color-subtext); font-size:0.85rem; text-align:center;">0 db toll</div>`;
+      if (pensInCat.length > 0) {
+        const badges = pensInCat.map(p => `<span style="display:inline-block; padding:0.25rem 0.6rem; margin:0.2rem; background:rgba(139, 92, 246, 0.15); border:1px solid rgba(139, 92, 246, 0.3); border-radius:12px; color:#ddd; font-size:0.75rem;">${p}</span>`).join('');
+        pensHtml = `
+          <details style="font-size:0.85rem;">
+            <summary style="cursor:pointer; color:var(--color-accent); font-weight:bold; outline:none; user-select:none;">${pensInCat.length} db toll ▼</summary>
+            <div style="margin-top:0.6rem; display:flex; flex-wrap:wrap; text-align:left; padding:0.5rem; background:rgba(0,0,0,0.2); border-radius:8px; border:1px solid rgba(255,255,255,0.05); max-height: 250px; overflow-y:auto;" class="custom-scrollbar">
+              ${badges}
+            </div>
+          </details>
+        `;
+      }
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="font-weight:bold;">${cat.id}</td>
         <td><input type="text" class="styled-input cat-icon" value="${cat.icon}" style="width:60px; text-align:center;"></td>
         <td><input type="text" class="styled-input cat-name" value="${cat.name}"></td>
+        <td style="min-width:150px;">${pensHtml}</td>
         <td><input type="number" class="styled-input cat-limit" value="${cat.limit_stock}" style="width:80px; text-align:center;"></td>
-        <td><button class="cta-button secondary save-cat-btn">💾 Mentés</button></td>
+        <td style="display:flex; gap:0.5rem; justify-content:center;">
+          <button class="cta-button secondary save-cat-btn" style="padding:0.4rem 0.8rem; font-size:0.85rem;">💾 Mentés</button>
+          <button class="cta-button del-cat-btn" style="background:#ef4444; border:none; padding:0.4rem 0.8rem; font-size:0.85rem;">❌ Törlés</button>
+        </td>
       `;
       tr.querySelector('.save-cat-btn').addEventListener('pointerup', async (e) => {
         e.preventDefault();
@@ -2093,15 +2356,86 @@ document.addEventListener("DOMContentLoaded", () => {
           loadOrderNames(); 
         }
       });
+
+      tr.querySelector('.del-cat-btn').addEventListener('pointerup', async (e) => {
+        e.preventDefault();
+        
+        // Ellenőrizzük, hogy használja-e valaki
+        const { count } = await supabaseClient.from('names').select('*', { count: 'exact', head: true }).eq('category', cat.id);
+        if (count > 0) {
+          alert(`Nem törölheted, mert ${count} db toll jelenleg ebben a kategóriában van! Előbb tedd át őket máshova.`);
+          return;
+        }
+
+        if (confirm(`Biztosan törlöd a(z) '${cat.id}' kategóriát?`)) {
+          const { error } = await supabaseClient.from('categories').delete().eq('id', cat.id);
+          if (error) { alert('Hiba a törléskor!'); console.error(error); }
+          else {
+            alert('Kategória törölve!');
+            await fetchCategories();
+            applyGlobalSearchFilter();
+            loadStats();
+          }
+        }
+      });
       categoriesTableBody.appendChild(tr);
     });
   }
+
+  // Add Category Modal Logic
+  const addCategoryModal = document.getElementById("add-category-modal");
+  const addCatId = document.getElementById("add-cat-id");
+  const addCatIcon = document.getElementById("add-cat-icon");
+  const addCatName = document.getElementById("add-cat-name");
+  const addCatLimit = document.getElementById("add-cat-limit");
+
+  document.getElementById("add-category-btn")?.addEventListener("pointerup", (e) => {
+    e.preventDefault();
+    addCatId.value = "";
+    addCatIcon.value = "";
+    addCatName.value = "";
+    addCatLimit.value = "0";
+    addCategoryModal.classList.remove("hidden");
+  });
+
+  const closeAddCatModal = () => addCategoryModal.classList.add("hidden");
+  document.getElementById("add-category-close")?.addEventListener("pointerup", (e) => { e.preventDefault(); closeAddCatModal(); });
+  document.getElementById("add-category-cancel")?.addEventListener("pointerup", (e) => { e.preventDefault(); closeAddCatModal(); });
+
+  document.getElementById("add-category-save")?.addEventListener("pointerup", async (e) => {
+    e.preventDefault();
+    const id = addCatId.value.trim().toUpperCase();
+    const icon = addCatIcon.value.trim();
+    const name = addCatName.value.trim();
+    const limit = parseInt(addCatLimit.value, 10) || 0;
+
+    if (!id || !name) { alert("Az azonosító és a név megadása kötelező!"); return; }
+    if (globalCategories.find(c => c.id === id)) { alert("Ilyen azonosítójú kategória már létezik!"); return; }
+
+    const { error } = await supabaseClient.from('categories').insert({ id, name, icon, limit_stock: limit });
+    if (error) { alert("Hiba a mentéskor: " + error.message); console.error(error); }
+    else {
+      closeAddCatModal();
+      await fetchCategories();
+      alert("Új kategória sikeresen hozzáadva!");
+    }
+  });
+
 
   document.getElementById('auto-categorize-btn')?.addEventListener('pointerup', async (e) => {
     e.preventDefault();
     if (!confirm('Biztosan újra akarod kategorizálni a tollakat az elmúlt 30 nap eladásai alapján? (10%-20%-40%-20%-10% elosztás)')) return;
     
     document.getElementById('auto-categorize-btn').textContent = '⏳ Kis türelmet...';
+
+    // 0. Biztosítjuk, hogy az A, B, C, D, E kategóriák létezzenek
+    const requiredCats = ['A', 'B', 'C', 'D', 'E'];
+    for (const reqId of requiredCats) {
+      if (!globalCategories.find(c => c.id === reqId)) {
+        await supabaseClient.from('categories').insert({ id: reqId, name: `Kategória ${reqId}`, icon: '🏷️', limit_stock: 0 });
+      }
+    }
+    await fetchCategories(); // Újratöltjük a listát
 
     // 1. Lekérjük a tranzakciókat
     const fromDate = new Date();
@@ -2166,6 +2500,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── INDÍTÁS ──────────────────────────────────────────────────
   async function initApp() {
+    await fetchCategories(); // Fontos: Kategóriák betöltése minden más előtt
+
     // Ha korábban belépett ezen az eszközön → automatikus bejelentkezés
     const savedUser = localStorage.getItem("pix_user");
     const savedRole = localStorage.getItem("pix_role");

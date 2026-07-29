@@ -32,7 +32,6 @@
         <li data-role="admin" data-section="stats-section"    class="nav-item">📊 Statisztika</li>
         <li data-role="admin" data-section="categories-section" class="nav-item">🏷️ Kategóriák</li>
         <li data-role="admin" data-section="admin-log-section" class="nav-item">📋 Napló</li>
-        <li data-role="admin" data-section="osszeiras-log-section" class="nav-item">📝 Összeírások</li>
         <li data-role="admin" data-section="import-log-section" class="nav-item">📥 Import Napló</li>
 
         <!-- Worker navigáció -->
@@ -127,23 +126,53 @@
         <div class="section-header">
           <h2>Rendelés Export</h2>
           <div class="section-actions">
+            <button id="refresh-orders-btn" class="cta-button secondary">Frissítés</button>
+          </div>
+        </div>
+
+        <div class="log-tabs" style="margin-bottom:1.5rem;">
+          <button class="log-tab-btn order-tab-btn active" data-target="current-orders-view">Aktuális Rendelendők</button>
+          <button class="log-tab-btn order-tab-btn" data-target="saved-orders-view">Régi Rendelések</button>
+        </div>
+
+        <div id="current-orders-view">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:1rem;">
             <select class="styled-select category-filter-select">
               <!-- JS tölti fel -->
             </select>
-            <button id="export-order-btn" class="cta-button">📥 Excel Export</button>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <input type="text" id="save-order-note" class="styled-input" placeholder="Opcionális név (pl. Nyári)" style="max-width:200px;">
+              <button id="save-order-btn" class="cta-button" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">💾 Rendelés Mentése</button>
+              <button id="export-order-btn" class="cta-button">📥 Excel Export</button>
+            </div>
           </div>
+          <table class="glass-table" id="order-table">
+            <thead>
+              <tr>
+                <th>Toll neve</th>
+                <th>Kategória</th>
+                <th>Raktáron</th>
+                <th>Rendelés mennyisége</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
-        <table class="glass-table" id="order-table">
-          <thead>
-            <tr>
-              <th>Toll neve</th>
-              <th>Kategória</th>
-              <th>Raktáron</th>
-              <th>Rendelés mennyisége</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+
+        <div id="saved-orders-view" class="hidden">
+          <table class="glass-table" id="saved-orders-table">
+            <thead>
+              <tr>
+                <th>Dátum / Név</th>
+                <th>Tételek száma</th>
+                <th>Művelet</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- JS tölti fel -->
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <!-- Statisztika szekció (admin) -->
@@ -203,6 +232,7 @@
         <div class="section-header">
           <h2>🏷️ Kategóriák Beállítása</h2>
           <div class="section-actions">
+            <button id="add-category-btn" class="cta-button">+ Új Kategória</button>
             <button id="auto-categorize-btn" class="cta-button" style="background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 100%);">✨ Automatikus Kategorizálás</button>
           </div>
         </div>
@@ -218,6 +248,7 @@
                   <th>Szint</th>
                   <th>Ikon</th>
                   <th>Kategória Név</th>
+                  <th>Tollak</th>
                   <th>Kritikus Készlet (db)</th>
                   <th>Művelet</th>
                 </tr>
@@ -239,6 +270,12 @@
             <button id="admin-logout" class="cta-button secondary">Kilépés</button>
           </div>
         </div>
+
+        <div id="admin-log-tabs" class="log-tabs" style="margin-bottom:1rem;">
+          <button data-tab="kivitel" class="admin-tab-btn log-tab-btn active">Kivitelek (Mozgás)</button>
+          <button data-tab="leltar" class="admin-tab-btn log-tab-btn">📝 Összeírások</button>
+          <button data-tab="korrekcio" class="admin-tab-btn log-tab-btn">Kézi módosítások</button>
+        </div>
         <table class="glass-table" id="admin-log-table">
           <thead>
             <tr>
@@ -251,17 +288,8 @@
           </thead>
           <tbody></tbody>
         </table>
-      </section>
 
-      <!-- Osszeiras Log Section -->
-      <section id="osszeiras-log-section" class="section hidden" data-role="admin">
-        <div class="section-header">
-          <h2>📝 Összeírások (Piszkozatok)</h2>
-          <div class="section-actions">
-            <button id="refresh-osszeiras-log" class="cta-button secondary">Frissítés</button>
-          </div>
-        </div>
-        <table class="glass-table" id="osszeiras-log-table">
+        <table class="glass-table hidden" id="osszeiras-log-table">
           <thead>
             <tr>
               <th>Dátum</th>
@@ -481,6 +509,38 @@
           <button class="cta-button user-select-btn" data-user="Szabi" style="font-size:1.1rem; padding:0.9rem;">🧑 Szabi</button>
           <hr style="border-color:var(--color-border); margin:0.3rem 0;" />
           <button id="user-select-admin" class="cta-button secondary" style="font-size:0.95rem;">🔐 Admin belépés</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Category Modal -->
+    <div id="add-category-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>Új Kategória</h3>
+          <button id="add-category-close" class="modal-close-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label for="add-cat-id">Azonosító (pl. F, VIP):</label>
+            <input type="text" id="add-cat-id" class="styled-input" placeholder="Pl. F" />
+          </div>
+          <div class="form-row">
+            <label for="add-cat-icon">Ikon (Emoji):</label>
+            <input type="text" id="add-cat-icon" class="styled-input" placeholder="Pl. 💎" />
+          </div>
+          <div class="form-row">
+            <label for="add-cat-name">Kategória Név:</label>
+            <input type="text" id="add-cat-name" class="styled-input" placeholder="Pl. VIP Tollak" />
+          </div>
+          <div class="form-row">
+            <label for="add-cat-limit">Kritikus Készlet (db):</label>
+            <input type="number" id="add-cat-limit" class="styled-input" value="0" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="add-category-cancel" class="cta-button secondary">Mégse</button>
+          <button id="add-category-save" class="cta-button">Mentés</button>
         </div>
       </div>
     </div>
