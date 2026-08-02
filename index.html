@@ -545,6 +545,43 @@
       </div>
     </div>
 
+    <!-- Scrap Item Modal (Selejtezés) -->
+    <div id="scrap-item-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>Selejtezés (Hibás termék)</h3>
+          <button id="scrap-item-close" class="modal-close-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="scrap-item-id" />
+          <div class="form-row">
+            <label>Név:</label>
+            <input type="text" id="scrap-item-name" class="styled-input" readonly style="background: rgba(255,255,255,0.05); color: var(--color-subtext);" />
+          </div>
+          <div class="form-row">
+            <label for="scrap-item-qty">Mennyiség (db):</label>
+            <input type="number" id="scrap-item-qty" class="styled-input" value="1" min="1" />
+          </div>
+          <div class="form-row">
+            <label for="scrap-item-booth">Honnan veszed le?</label>
+            <select id="scrap-item-booth" class="styled-input">
+              <option value="kozponti">Központi Raktár</option>
+              <option value="bazar">Bazár</option>
+              <option value="fenti">Krisztián</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="scrap-item-notes">Megjegyzés (pl. gyári hibás, törött):</label>
+            <input type="text" id="scrap-item-notes" class="styled-input" placeholder="Opcionális" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="scrap-item-cancel" class="cta-button secondary">Mégse</button>
+          <button id="scrap-item-save" class="cta-button danger">🗑️ Selejtezés</button>
+        </div>
+      </div>
+    </div>
+
     <script defer src="js/app.js?v=19"></script>
 </body>
 </html>

@@ -968,7 +968,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const { data: txData, error: txError } = await supabaseClient
       .from('transactions')
       .select('*')
-      .eq('type', 'kivisz')
+      .in('type', ['kivisz', 'selejt'])
       .gte('created_at', fromDate.toISOString());
 
     const { data: namesData, error: namesError } = await supabaseClient
@@ -988,8 +988,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const items = Array.isArray(tx.items) ? tx.items : [];
       items.forEach(item => {
         const qty = Math.abs(item.qty || 0);
-        totalItemsTaken += qty;
-        penSales[item.name] = (penSales[item.name] || 0) + qty;
+        if (tx.type === 'kivisz') {
+          totalItemsTaken += qty;
+          penSales[item.name] = (penSales[item.name] || 0) + qty;
+        } else if (tx.type === 'selejt' && (tx.booth === 'bazar' || tx.booth === 'fenti')) {
+          totalItemsTaken = Math.max(0, totalItemsTaken - qty);
+          penSales[item.name] = (penSales[item.name] || 0) - qty;
+        }
       });
     });
 
@@ -1617,10 +1622,12 @@ document.addEventListener("DOMContentLoaded", () => {
         K: <span style="color:${fenti > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${fenti > 0 ? 'bold' : 'normal'};">${fenti > 0 ? fenti : '-'}</span>
       </td>
       <td>
+        <button class="scrap-btn" aria-label="Selejtezés" title="Selejt jelentése" style="display: ${currentRole === 'admin' ? 'inline-block' : 'none'}; background: transparent; border: none; cursor: pointer; font-size: 1.1rem; padding: 0.2rem;">⚠️</button>
         <button class="edit-btn" aria-label="Szerkesztés">✏️</button>
         <button class="del-btn"  aria-label="Törlés">🗑️</button>
       </td>`;
 
+    tr.querySelector(".scrap-btn")?.addEventListener("pointerup", (e) => { e.preventDefault(); openScrapModal(item); });
     tr.querySelector(".edit-btn").addEventListener("pointerup", (e) => { e.preventDefault(); editName(item); });
     tr.querySelector(".del-btn").addEventListener("pointerup",  (e) => { e.preventDefault(); deleteName(item.id); });
     namesTableBody.appendChild(tr);
@@ -1793,6 +1800,99 @@ document.addEventListener("DOMContentLoaded", () => {
           loadAndRenderNames();
         }
       });
+  }
+
+  // ── SELEJTEZÉS (SCRAP) LOGIKA ──────────────────────────────
+  const scrapModal = document.getElementById("scrap-item-modal");
+  const scrapIdInput = document.getElementById("scrap-item-id");
+  const scrapNameInput = document.getElementById("scrap-item-name");
+  const scrapQtyInput = document.getElementById("scrap-item-qty");
+  const scrapBoothSelect = document.getElementById("scrap-item-booth");
+  const scrapNotesInput = document.getElementById("scrap-item-notes");
+
+  document.getElementById("scrap-item-close")?.addEventListener("pointerup", closeScrapModal);
+  document.getElementById("scrap-item-cancel")?.addEventListener("pointerup", closeScrapModal);
+  document.getElementById("scrap-item-save")?.addEventListener("pointerup", saveScrapItem);
+
+  function closeScrapModal(e) {
+    if (e) e.preventDefault();
+    scrapModal.classList.add("hidden");
+  }
+
+  function openScrapModal(item) {
+    scrapIdInput.value = item.id;
+    scrapNameInput.value = item.name || "";
+    scrapQtyInput.value = 1;
+    scrapNotesInput.value = "";
+    scrapModal.classList.remove("hidden");
+  }
+
+  async function saveScrapItem(e) {
+    e.preventDefault();
+    const id = scrapIdInput.value;
+    if (!id) return;
+
+    const qty = parseInt(scrapQtyInput.value, 10);
+    if (isNaN(qty) || qty <= 0) {
+      alert("Érvénytelen mennyiség!");
+      return;
+    }
+
+    const booth = scrapBoothSelect.value;
+    let note = scrapNotesInput.value.trim();
+    if (!note) note = "Selejt / Hibás termék";
+
+    // 1. Lekérdezzük a jelenlegi készletet
+    const { data: oldItem, error: fetchErr } = await supabaseClient
+      .from("names")
+      .select("name, central_stock, bazar_stock, fenti_stock")
+      .eq("id", id)
+      .single();
+    
+    if (fetchErr || !oldItem) {
+      alert("Hiba a készlet lekérdezésekor!");
+      return;
+    }
+
+    // 2. Kiszámoljuk az új készletet
+    let updatePayload = {};
+    if (booth === "kozponti") {
+      updatePayload.central_stock = (oldItem.central_stock || 0) - qty;
+    } else if (booth === "bazar") {
+      updatePayload.bazar_stock = (oldItem.bazar_stock || 0) + qty;
+    } else if (booth === "fenti") {
+      updatePayload.fenti_stock = (oldItem.fenti_stock || 0) + qty;
+    }
+
+    // 3. Frissítjük a készletet
+    const { error: updateErr } = await supabaseClient
+      .from("names")
+      .update(updatePayload)
+      .eq("id", id);
+    
+    if (updateErr) {
+      alert("Hiba a készlet frissítésekor: " + updateErr.message);
+      return;
+    }
+
+    // 4. Naplózzuk a selejtet
+    const { error: txErr } = await supabaseClient.from("transactions").insert({
+      type: "selejt",
+      booth: booth,
+      user_name: currentUser || "Ismeretlen",
+      items: [{ name: oldItem.name, qty: qty }],
+      notes: note
+    });
+
+    if (txErr) {
+      console.error("Selejt tranzakció mentése sikertelen:", txErr);
+      alert("Figyelem: A készlet csökkent, de a naplózás sikertelen volt! (A tranzakció típusa lehet hogy hiányzik az adatbázisból)");
+    } else {
+      alert("Sikeresen selejtezve!");
+    }
+
+    closeScrapModal();
+    loadAndRenderNames();
   }
 
   addItemBtn?.addEventListener("pointerup", (e) => { e.preventDefault(); addName(); });
@@ -2437,15 +2537,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     await fetchCategories(); // Újratöltjük a listát
 
-    // 1. Lekérjük a tranzakciókat
+    // 1. Lekérjük a tranzakciókat (kivisz és selejt is kell, hogy a selejt levonódjon a fogyásból)
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - 30);
-    const { data: txData } = await supabaseClient.from('transactions').select('items').eq('type', 'kivisz').gte('created_at', fromDate.toISOString());
+    const { data: txData } = await supabaseClient.from('transactions').select('items, type, booth').in('type', ['kivisz', 'selejt']).gte('created_at', fromDate.toISOString());
     
     const sales = {};
     (txData || []).forEach(tx => {
       (tx.items || []).forEach(item => {
-        sales[item.name] = (sales[item.name] || 0) + Math.abs(item.qty || 0);
+        const qty = Math.abs(item.qty || 0);
+        if (tx.type === 'kivisz') {
+          sales[item.name] = (sales[item.name] || 0) + qty;
+        } else if (tx.type === 'selejt' && (tx.booth === 'bazar' || tx.booth === 'fenti')) {
+          sales[item.name] = (sales[item.name] || 0) - qty;
+        }
       });
     });
 
