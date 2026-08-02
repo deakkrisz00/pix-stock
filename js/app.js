@@ -1111,6 +1111,14 @@ document.addEventListener("DOMContentLoaded", () => {
           const reverseQty = rec.type === 'kivisz' ? -Math.abs(item.qty) : Math.abs(item.qty);
           await updateStock(item.name, rec.booth, reverseQty);
         }
+      } else if (rec.type === 'selejt') {
+        if (rec.booth === 'kozponti') {
+          const items = Array.isArray(rec.items) ? rec.items : [];
+          for (const item of items) {
+             // Vissza kell tenni a központi raktárba
+             await updateStock(item.name, rec.booth, -Math.abs(item.qty));
+          }
+        }
       } else if (rec.type === 'korrekcio') {
         const items = Array.isArray(rec.items) ? rec.items : [];
         for (const item of items) {
@@ -1156,6 +1164,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (rec.type === 'kivisz' || rec.type === 'visszahoz') {
         const reverseQty = rec.type === 'kivisz' ? -Math.abs(item.qty) : Math.abs(item.qty);
         await updateStock(item.name, rec.booth, reverseQty);
+      } else if (rec.type === 'selejt') {
+        if (rec.booth === 'kozponti') {
+           await updateStock(item.name, rec.booth, -Math.abs(item.qty));
+        }
       } else if (rec.type === 'korrekcio') {
         const { data: currentStock, error: fetchErr } = await supabaseClient
           .from('names')
@@ -1255,6 +1267,7 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (rec.type === 'visszahoz') typeLabel = '⬇️ Visszahozott';
       else if (rec.type === 'rendeles') typeLabel = '🛒 Rendelés';
       else if (rec.type === 'korrekcio') typeLabel = '✏️ Kézi módosítás';
+      else if (rec.type === 'selejt') typeLabel = '🗑️ Selejt';
 
       let boothLabel = rec.booth;
       if (rec.booth === 'bazar') boothLabel = 'Bazár';
@@ -1854,25 +1867,23 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // 2. Kiszámoljuk az új készletet
+    // 2. Kiszámoljuk az új készletet (csak a központi raktárt módosítjuk, a hiányt nem piszkáljuk)
     let updatePayload = {};
     if (booth === "kozponti") {
       updatePayload.central_stock = (oldItem.central_stock || 0) - qty;
-    } else if (booth === "bazar") {
-      updatePayload.bazar_stock = (oldItem.bazar_stock || 0) + qty;
-    } else if (booth === "fenti") {
-      updatePayload.fenti_stock = (oldItem.fenti_stock || 0) + qty;
     }
 
-    // 3. Frissítjük a készletet
-    const { error: updateErr } = await supabaseClient
-      .from("names")
-      .update(updatePayload)
-      .eq("id", id);
-    
-    if (updateErr) {
-      alert("Hiba a készlet frissítésekor: " + updateErr.message);
-      return;
+    // 3. Frissítjük a készletet (ha van mit frissíteni)
+    if (Object.keys(updatePayload).length > 0) {
+      const { error: updateErr } = await supabaseClient
+        .from("names")
+        .update(updatePayload)
+        .eq("id", id);
+      
+      if (updateErr) {
+        alert("Hiba a készlet frissítésekor: " + updateErr.message);
+        return;
+      }
     }
 
     // 4. Naplózzuk a selejtet
