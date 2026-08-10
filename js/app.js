@@ -239,21 +239,24 @@ document.addEventListener("DOMContentLoaded", () => {
     const term = globalSearchInput ? globalSearchInput.value.toLowerCase() : "";
     const filterMode = currentFilterMode;
     
-    const tablesToFilter = ["#inventory-table", "#shortage-table", "#pens-table", "#order-table"];
+    const tablesToFilter = ["#inventory-table", "#shortage-table", "#pens-table", "#order-table", "#stats-table", "#low-stock-table"];
     tablesToFilter.forEach(tableSelector => {
+      const isStatsTable = tableSelector === "#stats-table" || tableSelector === "#low-stock-table";
       document.querySelectorAll(`${tableSelector} tbody tr`).forEach(tr => {
-        const name = tr.dataset.name?.toLowerCase() || tr.firstElementChild?.textContent.toLowerCase() || "";
-        const cat = tr.dataset.category || "C";
-        const stock = parseInt(tr.dataset.stock, 10) || 0;
+        const name = tr.dataset.name?.toLowerCase() || tr.firstElementChild?.textContent.trim().toLowerCase() || "";
         
-        let showByName = name.startsWith(term);
+        let showByName = name.includes(term);
         let showByCat = true;
         
-        if (filterMode === "CRITICAL") {
-          const limit = getCategory(cat).limit_stock;
-          if (stock >= limit) showByCat = false;
-        } else if (filterMode !== "ALL") {
-          if (cat !== filterMode) showByCat = false;
+        if (!isStatsTable) {
+          const cat = tr.dataset.category || "C";
+          const stock = parseInt(tr.dataset.stock, 10) || 0;
+          if (filterMode === "CRITICAL") {
+            const limit = getCategory(cat).limit_stock;
+            if (stock >= limit) showByCat = false;
+          } else if (filterMode !== "ALL") {
+            if (cat !== filterMode) showByCat = false;
+          }
         }
         
         if (showByName && showByCat) {
@@ -870,7 +873,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const { name, fulfillAmount, backorderAmount, newCentralStock, newPendingShortage, newShortageReq, correctionDiff } = update;
       
       if (newShortageReq > 0) {
-        osszeirasItems.push({ name, qty: newShortageReq });
+        osszeirasItems.push({ name, qty: newShortageReq, fulfilled: fulfillAmount });
       }
 
       if (fulfillAmount > 0) {
@@ -971,7 +974,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .in('type', ['kivisz', 'selejt'])
       .gte('created_at', fromDate.toISOString());
 
-    const { data: namesData, error: namesError } = await supabaseClient
+    let { data: namesData, error: namesError } = await supabaseClient
       .from('names')
       .select('name, central_stock, category, bazar_stock, fenti_stock');
 
@@ -981,19 +984,38 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    // Szűrés a legördülő alapján
+    const filterMode = currentFilterMode;
+    if (filterMode === "CRITICAL") {
+      namesData = namesData.filter(n => {
+        const limit = getCategory(n.category || 'C').limit_stock;
+        return (parseInt(n.central_stock, 10) || 0) < limit;
+      });
+    } else if (filterMode !== "ALL") {
+      namesData = namesData.filter(n => (n.category || 'C') === filterMode);
+    }
+
     let totalItemsTaken = 0;
     const penSales = {};
+
+    // Alaphelyzetbe hozzuk a listát a szűrt nevekkel, hogy a 0 darabosak is megjelenjenek
+    (namesData || []).forEach(n => {
+      penSales[n.name] = 0;
+    });
 
     (txData || []).forEach(tx => {
       const items = Array.isArray(tx.items) ? tx.items : [];
       items.forEach(item => {
-        const qty = Math.abs(item.qty || 0);
-        if (tx.type === 'kivisz') {
-          totalItemsTaken += qty;
-          penSales[item.name] = (penSales[item.name] || 0) + qty;
-        } else if (tx.type === 'selejt' && (tx.booth === 'bazar' || tx.booth === 'fenti')) {
-          totalItemsTaken = Math.max(0, totalItemsTaken - qty);
-          penSales[item.name] = (penSales[item.name] || 0) - qty;
+        // Csak akkor számoljuk, ha a kategória szűrőn átment a toll
+        if (penSales[item.name] !== undefined) {
+          const qty = Math.abs(item.qty || 0);
+          if (tx.type === 'kivisz') {
+            totalItemsTaken += qty;
+            penSales[item.name] += qty;
+          } else if (tx.type === 'selejt' && (tx.booth === 'bazar' || tx.booth === 'fenti')) {
+            totalItemsTaken = Math.max(0, totalItemsTaken - qty);
+            penSales[item.name] -= qty;
+          }
         }
       });
     });
@@ -1244,10 +1266,17 @@ document.addEventListener("DOMContentLoaded", () => {
       .order('created_at', { ascending: false })
       .limit(200);
 
+    const boothColTh = document.getElementById('admin-log-col-booth');
+    const typeColTh = document.getElementById('admin-log-col-type');
+
     if (currentAdminLogTab === 'korrekcio') {
-      query = query.eq('type', 'korrekcio');
+      query = query.in('type', ['korrekcio', 'selejt']);
+      if (boothColTh) boothColTh.style.display = 'none';
+      if (typeColTh) typeColTh.style.display = '';
     } else {
-      query = query.neq('type', 'korrekcio');
+      query = query.not('type', 'in', '("korrekcio","selejt")');
+      if (boothColTh) boothColTh.style.display = '';
+      if (typeColTh) typeColTh.style.display = '';
     }
 
     const { data, error } = await query;
@@ -1283,12 +1312,19 @@ document.addEventListener("DOMContentLoaded", () => {
       // Fő sor (kattintható)
       const mainTr = document.createElement('tr');
       mainTr.className = 'log-main-row';
+      
+      const hideCols = (currentAdminLogTab === 'korrekcio');
+      const boothTd = hideCols ? '' : `<td>${boothLabel}</td>`;
+      const typeTd = `<td>${typeLabel}</td>`;
+      
+      const totalColContent = `<strong>${totalItems} db</strong> (${uniqueItems} fajta) <span class="cta-button secondary" style="float:right; padding:0.2rem 0.5rem; font-size:0.8rem; cursor:pointer;">Részletek ▼</span>`;
+
       mainTr.innerHTML = `
         <td>${new Date(rec.created_at).toLocaleString('hu-HU')}</td>
         <td>${rec.user_name || '–'}</td>
-        <td>${boothLabel}</td>
-        <td>${typeLabel}</td>
-        <td><strong>${totalItems} db</strong> (${uniqueItems} fajta) <span class="cta-button secondary" style="float:right; padding:0.2rem 0.5rem; font-size:0.8rem; cursor:pointer;">Részletek ▼</span></td>
+        ${boothTd}
+        ${typeTd}
+        <td>${totalColContent}</td>
       `;
 
       // Részletek sor (rejtett)
@@ -1325,7 +1361,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }).join('');
 
       detailsTr.innerHTML = `
-        <td colspan="5" style="padding: 0;">
+        <td colspan="${hideCols ? '4' : '5'}" style="padding: 0;">
           <div class="log-details-content">
             <ul style="list-style:none; padding:0; margin:0;">${itemsHtml}</ul>
             <div style="margin-top: 1rem; text-align: right;">
@@ -1418,14 +1454,20 @@ document.addEventListener("DOMContentLoaded", () => {
       const detailsTr = document.createElement('tr');
       detailsTr.className = 'log-details-row';
       
-      const itemsHtml = items.map((item) => `
-        <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
-          <div>
-            <span>${item.name}</span>
-            <span class="log-qty-badge" style="margin-left:0.5rem; background:rgba(99, 102, 241, 0.15); color:var(--color-accent);">${item.qty} db</span>
-          </div>
-        </li>
-      `).join('');
+      const itemsHtml = items.map((item) => {
+        const isPartial = item.fulfilled !== undefined && item.fulfilled < item.qty;
+        const qtyBadge = isPartial
+          ? `<span class="log-qty-badge" style="margin-left:0.5rem; background:rgba(239, 68, 68, 0.15); color:#ef4444; font-size:0.8rem;">kért: ${item.qty} / kapott: ${item.fulfilled}</span>`
+          : `<span class="log-qty-badge" style="margin-left:0.5rem; background:rgba(99, 102, 241, 0.15); color:var(--color-accent);">${item.qty} db</span>`;
+        return `
+          <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
+            <div>
+              <span>${item.name}</span>
+              ${qtyBadge}
+            </div>
+          </li>
+        `;
+      }).join('');
 
       detailsTr.innerHTML = `
         <td colspan="5" style="padding: 0;">
@@ -1622,13 +1664,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const catIcon = `${catObj.icon} (${catObj.id})`;
     
     // Szűrés támogatáshoz beállítjuk a data attribútumokat
+    tr.dataset.name = item.name;
     tr.dataset.category = cat;
     tr.dataset.stock = stock;
     tr.dataset.bazar = bazar;
     tr.dataset.fenti = fenti;
     
     tr.innerHTML = `
-      <td>${item.name}</td>
+      <td>
+        <span class="item-name-cell" style="${currentRole === 'admin' ? 'cursor:pointer;' : ''}">${item.name}</span>
+      </td>
       <td ${stockStyle}>${stock}</td>
       <td style="font-size: 0.85rem;">
         B: <span style="color:${bazar > 0 ? '#f87171' : 'var(--color-subtext)'}; font-weight:${bazar > 0 ? 'bold' : 'normal'};">${bazar > 0 ? bazar : '-'}</span> |
@@ -1640,10 +1685,175 @@ document.addEventListener("DOMContentLoaded", () => {
         <button class="del-btn"  aria-label="Törlés">🗑️</button>
       </td>`;
 
+    // Admin: névkattintás → statisztika modal
+    const nameCell = tr.querySelector('.item-name-cell');
+    if (nameCell && currentRole === 'admin') {
+      nameCell.addEventListener('pointerup', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openItemStatsModal(item);
+      });
+    }
+
     tr.querySelector(".scrap-btn")?.addEventListener("pointerup", (e) => { e.preventDefault(); openScrapModal(item); });
     tr.querySelector(".edit-btn").addEventListener("pointerup", (e) => { e.preventDefault(); editName(item); });
     tr.querySelector(".del-btn").addEventListener("pointerup",  (e) => { e.preventDefault(); deleteName(item.id); });
     namesTableBody.appendChild(tr);
+  }
+
+  // ── ITEM STATS MODAL ──────────────────────────────────────────
+  const itemStatsModal = document.getElementById('item-stats-modal');
+
+  function closeItemStatsModal() {
+    itemStatsModal?.classList.add('hidden');
+  }
+
+  document.getElementById('item-stats-close')?.addEventListener('pointerup', (e) => { e.preventDefault(); closeItemStatsModal(); });
+  document.getElementById('item-stats-close-btn')?.addEventListener('pointerup', (e) => { e.preventDefault(); closeItemStatsModal(); });
+  itemStatsModal?.addEventListener('pointerup', (e) => { if (e.target === itemStatsModal) closeItemStatsModal(); });
+
+  async function openItemStatsModal(item) {
+    if (!itemStatsModal) return;
+
+    const catObj = getCategory(item.category || 'C');
+    document.getElementById('item-stats-title').textContent = `${catObj.icon} ${item.name}`;
+    document.getElementById('item-stats-subtitle').textContent = `Kategória: ${catObj.name} (${catObj.id}) · ID: ${item.id.slice(0, 8)}…`;
+
+    // Aktuális készlet kártyák
+    const central = item.central_stock ?? 0;
+    const bazar   = item.bazar_stock   ?? 0;
+    const fenti   = item.fenti_stock   ?? 0;
+
+    const centralEl = document.getElementById('stats-central-stock');
+    const bazarEl   = document.getElementById('stats-bazar-stock');
+    const fentiEl   = document.getElementById('stats-fenti-stock');
+
+    centralEl.textContent = central;
+    centralEl.style.color = central === 0 ? '#f87171' : central < 0 ? '#ef4444' : 'var(--color-text)';
+    bazarEl.textContent   = bazar;
+    bazarEl.style.color   = bazar > 0 ? '#f87171' : 'var(--color-text)';
+    fentiEl.textContent   = fenti;
+    fentiEl.style.color   = fenti > 0 ? '#f59e0b' : 'var(--color-text)';
+
+    document.getElementById('item-stats-loading').classList.remove('hidden');
+    document.getElementById('item-stats-content').classList.add('hidden');
+    itemStatsModal.classList.remove('hidden');
+
+    const { data: allTx, error } = await supabaseClient
+      .from('transactions')
+      .select('id, type, booth, user_name, items, notes, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      document.getElementById('item-stats-loading').textContent = '❌ Hiba az adatok betöltésekor!';
+      console.error('openItemStatsModal:', error);
+      return;
+    }
+
+    const relevantTx = (allTx || []).filter(tx => {
+      const txItems = Array.isArray(tx.items) ? tx.items : [];
+      return txItems.some(i => i.name === item.name);
+    });
+
+    let totalKivisz    = 0;
+    let kiviszBazar    = 0;
+    let kiviszFenti    = 0;
+    let lastKiviszDate = null;
+    let osszeirasQty   = 0;
+    let osszeirasCount = 0;
+    let rendelesQty    = 0;
+    let rendelesCount  = 0;
+
+    const txTypeLabels = {
+      kivisz:    { icon: '⬆️', label: 'Kivitt',           color: '#34d399' },
+      visszahoz: { icon: '⬇️', label: 'Visszahozott',     color: '#60a5fa' },
+      osszeiras: { icon: '📝', label: 'Összeírás', color: '#a78bfa' },
+      rendeles:  { icon: '🛒', label: 'Rendelés',      color: '#38bdf8' },
+      korrekcio: { icon: '✏️', label: 'Kézi mód.',    color: '#fbbf24' },
+      feltoltes: { icon: '📥', label: 'Import',            color: '#6366f1' },
+      selejt:    { icon: '🗑️', label: 'Selejt',      color: '#f87171' },
+    };
+
+    const boothLabels = {
+      bazar: 'Bazár', fenti: 'Krisztián',
+      kozponti: 'Központi', mindketto: 'Mindkettő'
+    };
+
+    relevantTx.forEach(tx => {
+      const txItems = Array.isArray(tx.items) ? tx.items : [];
+      const matchItem = txItems.find(i => i.name === item.name);
+      if (!matchItem) return;
+      const qty = Math.abs(matchItem.qty || 0);
+
+      if (tx.type === 'kivisz') {
+        totalKivisz += qty;
+        if (tx.booth === 'bazar')  kiviszBazar += qty;
+        if (tx.booth === 'fenti')  kiviszFenti += qty;
+        if (!lastKiviszDate) lastKiviszDate = new Date(tx.created_at);
+      } else if (tx.type === 'osszeiras') {
+        osszeirasQty += matchItem.qty || 0;
+        osszeirasCount++;
+      } else if (tx.type === 'rendeles') {
+        rendelesQty += qty;
+        rendelesCount++;
+      }
+    });
+
+    document.getElementById('stats-total-kivisz').textContent = totalKivisz;
+    document.getElementById('stats-kivisz-bazar').textContent = kiviszBazar;
+    document.getElementById('stats-kivisz-fenti').textContent = kiviszFenti;
+    document.getElementById('stats-last-kivisz').textContent  = lastKiviszDate
+      ? `Legutóbbi kivitel: ${lastKiviszDate.toLocaleString('hu-HU')}`
+      : 'Még nem volt kivitel';
+
+    document.getElementById('stats-osszeiras-qty').textContent   = osszeirasQty;
+    document.getElementById('stats-osszeiras-count').textContent = osszeirasCount > 0
+      ? `${osszeirasCount} összeírásban szerepelt`
+      : 'Még nem szerepelt összeírásban';
+
+    document.getElementById('stats-rendeles-qty').textContent   = rendelesQty;
+    document.getElementById('stats-rendeles-count').textContent = rendelesCount > 0
+      ? `${rendelesCount} rendelésben volt`
+      : 'Még nem volt rendelésben';
+
+    const txListEl = document.getElementById('item-stats-tx-list');
+    txListEl.innerHTML = '';
+    const recent = relevantTx.slice(0, 10);
+
+    if (recent.length === 0) {
+      txListEl.innerHTML = '<div style="color:var(--color-subtext); font-size:0.8rem; text-align:center; padding:0.5rem;">Nincs tranzakció ehhez a tollhoz.</div>';
+    } else {
+      recent.forEach(tx => {
+        const txItems = Array.isArray(tx.items) ? tx.items : [];
+        const matchItem = txItems.find(i => i.name === item.name);
+        const qty = matchItem ? Math.abs(matchItem.qty || 0) : 0;
+        const meta = txTypeLabels[tx.type] || { icon: '❓', label: tx.type, color: 'var(--color-subtext)' };
+        const boothLabel = boothLabels[tx.booth] || tx.booth || '–';
+        const dateStr = new Date(tx.created_at).toLocaleString('hu-HU', {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
+        let qtyDisplay = `${qty} db`;
+        if (tx.type === 'osszeiras' && matchItem && matchItem.fulfilled !== undefined && matchItem.fulfilled < matchItem.qty) {
+          qtyDisplay = `<span style="color:#f87171;">kért: ${matchItem.qty} / kapott: ${matchItem.fulfilled}</span>`;
+        }
+
+        const div = document.createElement('div');
+        div.style.cssText = `display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.6rem; border-radius:8px; background:rgba(255,255,255,0.04); border-left:3px solid ${meta.color}; margin-bottom:0.4rem;`;
+        div.innerHTML = `
+          <span style="font-size:1rem;">${meta.icon}</span>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:0.8rem; font-weight:600; color:${meta.color};">${meta.label} · ${boothLabel}</div>
+            <div style="font-size:0.72rem; color:var(--color-subtext); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${dateStr} · ${tx.user_name || '–'}${tx.notes ? ' · ' + tx.notes : ''}</div>
+          </div>
+          <span style="font-size:0.85rem; font-weight:700; color:var(--color-text); white-space:nowrap;">${qtyDisplay}</span>
+        `;
+        txListEl.appendChild(div);
+      });
+    }
+
+    document.getElementById('item-stats-loading').classList.add('hidden');
+    document.getElementById('item-stats-content').classList.remove('hidden');
   }
 
   async function loadAndRenderNames() {

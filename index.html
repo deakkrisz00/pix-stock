@@ -281,8 +281,8 @@
             <tr>
               <th>Dátum</th>
               <th>Felhasználó</th>
-              <th>Bódé / Cél</th>
-              <th>Típus</th>
+              <th id="admin-log-col-booth">Bódé / Cél</th>
+              <th id="admin-log-col-type">Típus</th>
               <th>Összesen</th>
             </tr>
           </thead>
@@ -578,6 +578,87 @@
         <div class="modal-footer">
           <button id="scrap-item-cancel" class="cta-button secondary">Mégse</button>
           <button id="scrap-item-save" class="cta-button danger">🗑️ Selejtezés</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item Stats Modal (Admin Only) -->
+    <div id="item-stats-modal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width: 600px; width: 95%;">
+        <div class="modal-header">
+          <div>
+            <h3 id="item-stats-title" style="margin:0; font-size:1.3rem;">Toll Statisztika</h3>
+            <div id="item-stats-subtitle" style="font-size:0.85rem; color:var(--color-subtext); margin-top:0.3rem;">Kategória: -</div>
+          </div>
+          <button id="item-stats-close" class="modal-close-btn" aria-label="Close">✕</button>
+        </div>
+        
+        <div id="item-stats-loading" style="padding:2rem; text-align:center; color:var(--color-subtext);">
+          ⏳ Adatok betöltése...
+        </div>
+
+        <div id="item-stats-content" class="modal-body hidden" style="max-height: 70vh; overflow-y: auto;">
+          <!-- Aktuális Készlet -->
+          <h4 style="margin: 0 0 0.8rem 0; color: var(--color-subtext); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px;">Aktuális Készlet</h4>
+          <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1.5rem;">
+            <div class="glass-card" style="padding:1rem; text-align:center; border-left: 3px solid #6366f1;">
+              <div style="font-size:0.75rem; color:var(--color-subtext);">Raktár</div>
+              <div id="stats-central-stock" style="font-size:1.5rem; font-weight:bold;">0</div>
+            </div>
+            <div class="glass-card" style="padding:1rem; text-align:center; border-left: 3px solid #f87171;">
+              <div style="font-size:0.75rem; color:var(--color-subtext);">Bazár hiány</div>
+              <div id="stats-bazar-stock" style="font-size:1.5rem; font-weight:bold;">0</div>
+            </div>
+            <div class="glass-card" style="padding:1rem; text-align:center; border-left: 3px solid #f59e0b;">
+              <div style="font-size:0.75rem; color:var(--color-subtext);">Fenti hiány</div>
+              <div id="stats-fenti-stock" style="font-size:1.5rem; font-weight:bold;">0</div>
+            </div>
+          </div>
+
+          <!-- Összesített Statisztikák -->
+          <h4 style="margin: 0 0 0.8rem 0; color: var(--color-subtext); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px;">Összesített Tranzakciók (Minden idő)</h4>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.5rem;">
+            
+            <div class="glass-card" style="padding:1rem; border-left: 3px solid #34d399;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                <span style="font-size:0.85rem; font-weight:bold;">Kivitel (Fogyás)</span>
+                <span id="stats-total-kivisz" style="font-size:1.2rem; font-weight:bold; color:#34d399;">0</span>
+              </div>
+              <div style="font-size:0.75rem; color:var(--color-subtext);">
+                B: <span id="stats-kivisz-bazar">0</span> | K: <span id="stats-kivisz-fenti">0</span><br>
+                <span id="stats-last-kivisz" style="font-style:italic; font-size:0.7rem; margin-top:0.2rem; display:block;">Még nem volt kivitel</span>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:0.8rem;">
+              <div class="glass-card" style="padding:0.8rem; border-left: 3px solid #a78bfa; flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-size:0.85rem; font-weight:bold;">Összeírás kért</span>
+                  <span id="stats-osszeiras-qty" style="font-size:1.1rem; font-weight:bold; color:#a78bfa;">0</span>
+                </div>
+                <div id="stats-osszeiras-count" style="font-size:0.7rem; color:var(--color-subtext);">0 összeírásban szerepelt</div>
+              </div>
+              <div class="glass-card" style="padding:0.8rem; border-left: 3px solid #38bdf8; flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-size:0.85rem; font-weight:bold;">Rendelés</span>
+                  <span id="stats-rendeles-qty" style="font-size:1.1rem; font-weight:bold; color:#38bdf8;">0</span>
+                </div>
+                <div id="stats-rendeles-count" style="font-size:0.7rem; color:var(--color-subtext);">0 rendelésben volt</div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Tranzakció Lista -->
+          <h4 style="margin: 0 0 0.8rem 0; color: var(--color-subtext); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px;">Legutóbbi Tranzakciók (Max 10)</h4>
+          <div id="item-stats-tx-list" style="display:flex; flex-direction:column; gap:0.5rem;">
+            <!-- JS tölti fel -->
+          </div>
+
+        </div>
+        
+        <div class="modal-footer" style="margin-top:0; border-top:1px solid rgba(255,255,255,0.05); padding-top:1rem;">
+          <button id="item-stats-close-btn" class="cta-button secondary" style="width:100%;">Bezárás</button>
         </div>
       </div>
     </div>
