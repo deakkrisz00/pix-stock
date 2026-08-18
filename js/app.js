@@ -1943,7 +1943,11 @@ document.addEventListener("DOMContentLoaded", () => {
       recent.forEach(tx => {
         const txItems = Array.isArray(tx.items) ? tx.items : [];
         const matchItem = txItems.find(i => i.name === item.name);
-        const qty = matchItem ? Math.abs(matchItem.qty || 0) : 0;
+        let qty = 0;
+        if (matchItem) {
+          const rawQty = matchItem.qty !== undefined ? matchItem.qty : (matchItem.new_stock - matchItem.old_stock);
+          qty = Math.abs(rawQty || 0);
+        }
         const meta = txTypeLabels[tx.type] || { icon: '❓', label: tx.type, color: 'var(--color-subtext)' };
         const boothLabel = boothLabels[tx.booth] || tx.booth || '–';
         const dateStr = new Date(tx.created_at).toLocaleString('hu-HU', {
