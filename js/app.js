@@ -87,6 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (id === "admin-log-section") loadAdminLog();
     if (id === "osszeiras-log-section") loadOsszeirasLog();
     if (id === "import-log-section") loadImportLog();
+    if (id === "inventory-count-section") loadInventoryCount();
   }
   navItems.forEach(item => {
     item.addEventListener("pointerup", (e) => {
@@ -235,17 +236,23 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
   
+  function matchPrefix(text, term) {
+    if (!term) return true;
+    const words = text.toLowerCase().split(/[\s,.\-_\(\)\[\]:;]+/);
+    return words.some(w => w.startsWith(term));
+  }
+
   function applyGlobalSearchFilter() {
     const term = globalSearchInput ? globalSearchInput.value.toLowerCase() : "";
     const filterMode = currentFilterMode;
     
-    const tablesToFilter = ["#inventory-table", "#shortage-table", "#pens-table", "#order-table", "#stats-table", "#low-stock-table"];
+    const tablesToFilter = ["#inventory-table", "#shortage-table", "#pens-table", "#order-table", "#stats-table", "#low-stock-table", "#inventory-count-table"];
     tablesToFilter.forEach(tableSelector => {
       const isStatsTable = tableSelector === "#stats-table" || tableSelector === "#low-stock-table";
       document.querySelectorAll(`${tableSelector} tbody tr`).forEach(tr => {
         const name = tr.dataset.name?.toLowerCase() || tr.firstElementChild?.textContent.trim().toLowerCase() || "";
         
-        let showByName = name.includes(term);
+        let showByName = matchPrefix(name, term);
         let showByCat = true;
         
         if (!isStatsTable) {
@@ -266,6 +273,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     });
+
+    const filterLogTable = (tbodyId) => {
+      const tbody = document.querySelector(tbodyId);
+      if (!tbody) return;
+      const rows = tbody.children;
+      for (let i = 0; i < rows.length; i += 2) {
+        const mainTr = rows[i];
+        const detailsTr = rows[i+1];
+        if (!mainTr || !detailsTr) continue;
+        
+        const text = (mainTr.textContent + " " + detailsTr.textContent).toLowerCase();
+        if (matchPrefix(text, term)) {
+          mainTr.style.display = "";
+          detailsTr.style.display = "";
+        } else {
+          mainTr.style.display = "none";
+          detailsTr.style.display = "none";
+        }
+      }
+    };
+    filterLogTable("#admin-log-table tbody");
+    filterLogTable("#osszeiras-log-table tbody");
+    filterLogTable("#import-log-table tbody");
   }
 
   globalSearchInput?.addEventListener("input", applyGlobalSearchFilter);
@@ -345,7 +375,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <button class="qty-quick-btn qty-reset" data-reset="1" aria-label="Törlés" style="padding:0.4rem; font-size:1.1rem;">✕</button>
             </div>
             <div class="qty-control" style="margin-top: 4px; width: 100%;">
-              <input type="number" class="styled-input shortage-qty-input" value="0" min="-9999" max="9999"
+              <input type="number" inputmode="numeric" pattern="[0-9]*" class="styled-input shortage-qty-input" value="0" min="-9999" max="9999"
                 style="width:100%; text-align:center; padding:0.4rem 0.2rem; font-weight: bold; font-size: 1.1rem;" />
             </div>
           </div>
@@ -534,7 +564,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <button class="qty-quick-btn qty-reset" data-reset="1" aria-label="Törlés" style="padding:0.4rem; font-size:1.1rem;">✕</button>
             </div>
             <div class="qty-control" style="margin-top: 4px; width: 100%;">
-              <input type="number" class="styled-input order-qty-input" value="0" min="-9999" max="9999"
+              <input type="number" inputmode="numeric" pattern="[0-9]*" class="styled-input order-qty-input" value="0" min="-9999" max="9999"
                 style="width:100%; text-align:center; padding:0.4rem 0.2rem; font-weight: bold; font-size: 1.1rem;" />
             </div>
           </div>
@@ -587,7 +617,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const name = row.dataset.name;
       const qtyStr = row.querySelector('.order-qty-input').value;
       const qty = parseInt(qtyStr, 10) || 0;
-      dataList.push({ name, orderStr: qty === 0 ? "" : String(qty) });
+      dataList.push({ name, orderStr: qty === 0 ? "" : qty });
       if (qty > 0) {
         orderedItems.push({ name, qty });
       }
@@ -728,9 +758,53 @@ document.addEventListener("DOMContentLoaded", () => {
           </details>
         </td>
         <td style="text-align:center;">
+          <button class="cta-button export-saved-order-btn" style="background:#10b981; border:none; padding:0.4rem 0.8rem; font-size:0.85rem; margin-right:0.5rem; margin-bottom:0.2rem;">📥 Excel</button>
           <button class="cta-button del-order-btn" style="background:#ef4444; border:none; padding:0.4rem 0.8rem; font-size:0.85rem;">❌ Törlés</button>
         </td>
       `;
+
+      tr.querySelector('.export-saved-order-btn').addEventListener('pointerup', async (e) => {
+        e.preventDefault();
+        if (typeof XLSX === "undefined") {
+          alert("A SheetJS még töltődik be, kérlek várj...");
+          return;
+        }
+
+        const allNames = await fetchNames();
+        const orderQtyMap = {};
+        (order.items || []).forEach(i => {
+          orderQtyMap[i.name] = i.qty;
+        });
+
+        const dataList = [];
+        for (const item of allNames) {
+          const qty = orderQtyMap[item.name] || 0;
+          dataList.push({ name: item.name, orderStr: qty === 0 ? "" : qty });
+        }
+
+        const ROWS_PER_COL = 30;
+        const matrix = [];
+        for (let i = 0; i < ROWS_PER_COL; i++) matrix.push([]);
+        for (let i = 0; i < dataList.length; i++) {
+          const rowIdx = i % ROWS_PER_COL;
+          const colGroupIdx = Math.floor(i / ROWS_PER_COL);
+          const dlItem = dataList[i];
+          while (matrix[rowIdx].length < colGroupIdx * 2) {
+            matrix[rowIdx].push("");
+          }
+          matrix[rowIdx].push(dlItem.name);
+          matrix[rowIdx].push(dlItem.orderStr);
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(matrix);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Rendelés");
+        
+        // Extract timestamp from date string to ensure uniqueness if needed, or just use the local date format
+        const d = new Date(order.created_at);
+        const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+        XLSX.writeFile(wb, `Regi_Rendeles_${dateStr}.xlsx`);
+      });
 
       tr.querySelector('.del-order-btn').addEventListener('pointerup', async (e) => {
         e.preventDefault();
@@ -858,9 +932,16 @@ document.addEventListener("DOMContentLoaded", () => {
   summaryClose?.addEventListener("pointerup", e => { e.stopPropagation(); e.preventDefault(); closeSummaryModal(); });
   summaryModal?.addEventListener("pointerup", e => { if (e.target === summaryModal) closeSummaryModal(); });
 
+  let isConfirmingShortage = false;
   async function confirmShortage() {
     if (pendingShortageUpdates.length === 0) return;
+    if (isConfirmingShortage) return;
     
+    if (!confirm("Biztos mented?")) return;
+    
+    isConfirmingShortage = true;
+    
+    try {
     summaryConfirm.disabled = true;
     summaryConfirm.textContent = "⏳ Mentés...";
 
@@ -947,6 +1028,9 @@ document.addEventListener("DOMContentLoaded", () => {
     
     loadShortageNames();
     loadAndRenderNames();
+    } finally {
+      isConfirmingShortage = false;
+    }
   }
 
   summaryConfirm?.addEventListener("pointerup", e => { e.preventDefault(); confirmShortage(); });
@@ -1306,7 +1390,10 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (!boothLabel) boothLabel = '–';
 
       const items = Array.isArray(rec.items) ? rec.items : [];
-      const totalItems = items.reduce((sum, item) => sum + Math.abs(item.qty), 0);
+      const totalItems = items.reduce((sum, item) => {
+        const q = item.qty !== undefined ? item.qty : (item.new_stock - item.old_stock) || 0;
+        return sum + Math.abs(q);
+      }, 0);
       const uniqueItems = items.length;
 
       // Fő sor (kattintható)
@@ -1347,12 +1434,23 @@ document.addEventListener("DOMContentLoaded", () => {
               <button class="cta-button del-single-item-btn" data-index="${index}" style="background:transparent; color:#ef4444; border:1px solid #ef4444; padding:0.1rem 0.4rem; font-size:0.75rem;">❌ Törlés</button>
             </li>
           `;
-        } else {
+        } else if (rec.type === 'feltoltes') {
+          const q = item.qty !== undefined ? item.qty : (item.new_stock - item.old_stock) || 0;
           return `
             <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
               <div>
                 <span>${item.name}</span>
-                <span class="log-qty-badge" style="margin-left:0.5rem;">${item.qty} db</span>
+                <span class="log-qty-badge" style="margin-left:0.5rem; background:rgba(99, 102, 241, 0.15); color:var(--color-accent);">${item.old_stock ?? '?'} ➔ ${item.new_stock ?? '?'} db (${q > 0 ? '+' : ''}${q})</span>
+              </div>
+            </li>
+          `;
+        } else {
+          const q = item.qty !== undefined ? item.qty : (item.new_stock - item.old_stock) || 0;
+          return `
+            <li style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:0.3rem 0;">
+              <div>
+                <span>${item.name}</span>
+                <span class="log-qty-badge" style="margin-left:0.5rem;">${q} db</span>
               </div>
               <button class="cta-button del-single-item-btn" data-index="${index}" style="background:transparent; color:#ef4444; border:1px solid #ef4444; padding:0.1rem 0.4rem; font-size:0.75rem;">❌ Törlés</button>
             </li>
@@ -1365,17 +1463,19 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="log-details-content">
             <ul style="list-style:none; padding:0; margin:0;">${itemsHtml}</ul>
             <div style="margin-top: 1rem; text-align: right;">
-              <button class="cta-button del-transaction-btn" style="background:#ef4444; padding:0.4rem 1rem; font-size:0.85rem;">🗑️ Teljes Tranzakció Törlése</button>
+              ${rec.type === 'feltoltes' ? '<span style="font-size:0.8rem; color:var(--color-subtext);">Feltöltést az Importálás menüpontban lehet visszavonni.</span>' : '<button class="cta-button del-transaction-btn" style="background:#ef4444; padding:0.4rem 1rem; font-size:0.85rem;">🗑️ Teljes Tranzakció Törlése</button>'}
             </div>
           </div>
         </td>
       `;
 
       const delBtn = detailsTr.querySelector('.del-transaction-btn');
-      delBtn.addEventListener('pointerup', (e) => {
-        e.stopPropagation();
-        deleteTransaction(rec);
-      });
+      if (delBtn) {
+        delBtn.addEventListener('pointerup', (e) => {
+          e.stopPropagation();
+          deleteTransaction(rec);
+        });
+      }
 
       const delSingleBtns = detailsTr.querySelectorAll('.del-single-item-btn');
       delSingleBtns.forEach(btn => {
@@ -1389,17 +1489,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // Kattintás esemény
       mainTr.addEventListener("pointerup", (e) => {
         e.preventDefault();
-        const isOpen = detailsTr.classList.contains("open");
-        // Bezárunk minden mást (opcionális, de átláthatóbb)
-        document.querySelectorAll('.log-details-row.open').forEach(row => row.classList.remove('open'));
-        if (!isOpen) {
-          detailsTr.classList.add("open");
-        }
+        detailsTr.classList.toggle("open");
       });
 
       adminLogTableBody.appendChild(mainTr);
       adminLogTableBody.appendChild(detailsTr);
     });
+    applyGlobalSearchFilter();
   }
 
   refreshLogBtn?.addEventListener('pointerup', e => { e.preventDefault(); loadAdminLog(); });
@@ -1497,14 +1593,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // Kattintás esemény
       mainTr.addEventListener("pointerup", (e) => {
         e.preventDefault();
-        const isOpen = detailsTr.classList.contains("open");
-        document.querySelectorAll('#osszeiras-log-table .log-details-row.open').forEach(row => row.classList.remove('open'));
-        if (!isOpen) detailsTr.classList.add("open");
+        detailsTr.classList.toggle("open");
       });
 
       osszeirasLogTableBody.appendChild(mainTr);
       osszeirasLogTableBody.appendChild(detailsTr);
     });
+    applyGlobalSearchFilter();
   }
 
   refreshOsszeirasLogBtn?.addEventListener('pointerup', e => { e.preventDefault(); loadOsszeirasLog(); });
@@ -1597,14 +1692,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       mainTr.addEventListener("pointerup", (e) => {
         e.preventDefault();
-        const isOpen = detailsTr.classList.contains("open");
-        document.querySelectorAll('#import-log-table .log-details-row.open').forEach(row => row.classList.remove('open'));
-        if (!isOpen) detailsTr.classList.add("open");
+        detailsTr.classList.toggle("open");
       });
 
       importLogTableBody.appendChild(mainTr);
       importLogTableBody.appendChild(detailsTr);
     });
+    applyGlobalSearchFilter();
   }
   
   refreshImportLogBtn?.addEventListener('pointerup', e => { e.preventDefault(); loadImportLog(); });
@@ -1744,6 +1838,10 @@ document.addEventListener("DOMContentLoaded", () => {
       .select('id, type, booth, user_name, items, notes, created_at')
       .order('created_at', { ascending: false });
 
+    const { data: allOrders, error: ordersErr } = await supabaseClient
+      .from('orders')
+      .select('id, items, note, created_at');
+
     if (error) {
       document.getElementById('item-stats-loading').textContent = '❌ Hiba az adatok betöltésekor!';
       console.error('openItemStatsModal:', error);
@@ -1754,6 +1852,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const txItems = Array.isArray(tx.items) ? tx.items : [];
       return txItems.some(i => i.name === item.name);
     });
+
+    (allOrders || []).forEach(order => {
+      const orderItems = Array.isArray(order.items) ? order.items : [];
+      const matchItem = orderItems.find(i => i.name === item.name);
+      if (matchItem) {
+        relevantTx.push({
+          id: order.id,
+          type: 'rendeles',
+          booth: '',
+          user_name: 'Mentett rendelés',
+          items: order.items,
+          notes: order.note || 'Rendelés export',
+          created_at: order.created_at
+        });
+      }
+    });
+
+    relevantTx.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     let totalKivisz    = 0;
     let kiviszBazar    = 0;
@@ -1783,7 +1899,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const txItems = Array.isArray(tx.items) ? tx.items : [];
       const matchItem = txItems.find(i => i.name === item.name);
       if (!matchItem) return;
-      const qty = Math.abs(matchItem.qty || 0);
+      const rawQty = matchItem.qty !== undefined ? matchItem.qty : (matchItem.new_stock - matchItem.old_stock);
+      const qty = Math.abs(rawQty || 0);
 
       if (tx.type === 'kivisz') {
         totalKivisz += qty;
@@ -1818,7 +1935,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const txListEl = document.getElementById('item-stats-tx-list');
     txListEl.innerHTML = '';
-    const recent = relevantTx.slice(0, 10);
+    const recent = relevantTx.slice(0, 50);
 
     if (recent.length === 0) {
       txListEl.innerHTML = '<div style="color:var(--color-subtext); font-size:0.8rem; text-align:center; padding:0.5rem;">Nincs tranzakció ehhez a tollhoz.</div>';
@@ -2242,9 +2359,9 @@ document.addEventListener("DOMContentLoaded", () => {
     names.forEach(item => {
       dataMatrix.push([
         item.name,
-        item.central_stock || 0,
-        item.bazar_stock || 0,
-        item.fenti_stock || 0
+        Number(item.central_stock) || 0,
+        Number(item.bazar_stock) || 0,
+        Number(item.fenti_stock) || 0
       ]);
     });
 
@@ -2822,6 +2939,133 @@ document.addEventListener("DOMContentLoaded", () => {
     loadAndRenderNames();
     loadOrderNames();
     loadStats();
+  });
+
+  // ── LELTÁR RÖGZÍTÉSE ─────────────────────────────────────────
+  async function loadInventoryCount() {
+    const tableBody = document.querySelector("#inventory-count-table tbody");
+    if (!tableBody) return;
+    tableBody.innerHTML = "<tr><td colspan='3' style='text-align:center;'>Betöltés...</td></tr>";
+
+    const names = await fetchNames();
+    tableBody.innerHTML = "";
+
+    names.forEach(item => {
+      const tr = document.createElement("tr");
+      tr.dataset.id = item.id;
+      tr.dataset.name = item.name;
+      tr.dataset.category = item.category || 'C';
+      tr.dataset.stock = item.central_stock || 0;
+      
+      tr.innerHTML = `
+        <td>${item.name}</td>
+        <td style="font-weight: 500;">${item.central_stock || 0} db</td>
+        <td>
+          <input type="number" inputmode="numeric" pattern="[0-9]*" class="styled-input inventory-actual-input" placeholder="Valós db" min="0" style="max-width: 120px;" />
+        </td>
+      `;
+      tableBody.appendChild(tr);
+    });
+
+    applyGlobalSearchFilter();
+  }
+
+  document.getElementById("save-inventory-count-btn")?.addEventListener("pointerup", async (e) => {
+    e.preventDefault();
+    
+    const tableBody = document.querySelector("#inventory-count-table tbody");
+    const rows = tableBody.querySelectorAll("tr");
+    const updates = [];
+    const logItems = [];
+
+    rows.forEach(tr => {
+      const id = tr.dataset.id;
+      const name = tr.dataset.name;
+      const oldStock = parseInt(tr.dataset.stock, 10) || 0;
+      const input = tr.querySelector(".inventory-actual-input");
+      if (!input || input.value.trim() === "") return;
+
+      const newStock = parseInt(input.value, 10);
+      if (isNaN(newStock) || newStock < 0) return;
+
+      if (oldStock !== newStock) {
+        updates.push({ id, central_stock: newStock });
+        const delta = newStock - oldStock;
+        logItems.push({
+          id, name,
+          old_central: oldStock,
+          new_central: newStock,
+          delta_central: delta,
+          delta_bazar: 0,
+          delta_fenti: 0,
+          old_bazar: 0, new_bazar: 0,
+          old_fenti: 0, new_fenti: 0,
+          qty: Math.abs(delta)
+        });
+      }
+    });
+
+    if (updates.length === 0) {
+      alert("Nincs eltérés, vagy nem írtál be valós készletet!");
+      return;
+    }
+
+    if (!confirm(`Biztosan mented a leltárt? ${updates.length} toll készlete fog módosulni!`)) return;
+
+    let errorCount = 0;
+    for (const u of updates) {
+      const { error } = await supabaseClient.from('names').update({ central_stock: u.central_stock }).eq('id', u.id);
+      if (error) {
+        console.error("Hiba készlet frissítésnél:", error);
+        errorCount++;
+      }
+    }
+
+    if (logItems.length > 0) {
+      const { error: txErr } = await supabaseClient.from("transactions").insert({
+        type: "korrekcio",
+        booth: "kozponti",
+        user_name: currentUser || "Ismeretlen",
+        items: logItems,
+        notes: "Leltár (Valós vs Gép)"
+      });
+      if (txErr) console.error("Hiba naplózásnál:", txErr);
+    }
+
+    alert(`Leltár mentve! ${updates.length} tétel frissült. (Hiba: ${errorCount})`);
+    
+    loadInventoryCount(); 
+    loadAndRenderNames();
+    loadOrderNames();
+  });
+
+  // ── KÉNYELMI FUNKCIÓK ────────────────────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' && (e.target.type === 'number' || e.target.inputMode === 'numeric')) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        const table = e.target.closest('table');
+        if (table) {
+          e.preventDefault();
+          const inputs = Array.from(table.querySelectorAll('input[type="number"], input[inputmode="numeric"]'));
+          const idx = inputs.indexOf(e.target);
+          if (idx !== -1 && idx < inputs.length - 1) {
+            inputs[idx + 1].focus();
+            inputs[idx + 1].select();
+          }
+        }
+      } else if (e.key === 'ArrowUp') {
+        const table = e.target.closest('table');
+        if (table) {
+          e.preventDefault();
+          const inputs = Array.from(table.querySelectorAll('input[type="number"], input[inputmode="numeric"]'));
+          const idx = inputs.indexOf(e.target);
+          if (idx > 0) {
+            inputs[idx - 1].focus();
+            inputs[idx - 1].select();
+          }
+        }
+      }
+    }
   });
 
   // ── INDÍTÁS ──────────────────────────────────────────────────

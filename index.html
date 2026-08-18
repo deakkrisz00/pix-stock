@@ -29,6 +29,7 @@
         <li data-role="admin" data-section="inventory-section" class="nav-item active">📦 Készlet</li>
         <li data-role="admin" data-section="shortage-section" class="nav-item">📉 Hiány / Feltöltés</li>
         <li data-role="admin" data-section="order-section"     class="nav-item">🛒 Rendelés</li>
+        <li data-role="admin" data-section="inventory-count-section" class="nav-item">📝 Leltár</li>
         <li data-role="admin" data-section="stats-section"    class="nav-item">📊 Statisztika</li>
         <li data-role="admin" data-section="categories-section" class="nav-item">🏷️ Kategóriák</li>
         <li data-role="admin" data-section="admin-log-section" class="nav-item">📋 Napló</li>
@@ -175,6 +176,27 @@
         </div>
       </section>
 
+      <!-- Leltár szekció (Admin only) -->
+      <section id="inventory-count-section" class="section hidden" data-role="admin">
+        <div class="section-header">
+          <h2>📝 Leltár Rögzítése</h2>
+          <div class="section-actions">
+            <button id="save-inventory-count-btn" class="cta-button" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">💾 Leltár Mentése</button>
+          </div>
+        </div>
+
+        <table class="glass-table" id="inventory-count-table">
+          <thead>
+            <tr>
+              <th>Toll neve</th>
+              <th>Gép szerinti raktár</th>
+              <th>Valós raktárkészlet</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
       <!-- Statisztika szekció (admin) -->
       <section id="stats-section" class="section hidden">
         <div class="section-header">
@@ -270,7 +292,6 @@
             <button id="admin-logout" class="cta-button secondary">Kilépés</button>
           </div>
         </div>
-
         <div id="admin-log-tabs" class="log-tabs" style="margin-bottom:1rem;">
           <button data-tab="kivitel" class="admin-tab-btn log-tab-btn active">Kivitelek (Mozgás)</button>
           <button data-tab="leltar" class="admin-tab-btn log-tab-btn">📝 Összeírások</button>
@@ -650,7 +671,7 @@
           </div>
 
           <!-- Tranzakció Lista -->
-          <h4 style="margin: 0 0 0.8rem 0; color: var(--color-subtext); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px;">Legutóbbi Tranzakciók (Max 10)</h4>
+          <h4 style="margin: 0 0 0.8rem 0; color: var(--color-subtext); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px;">Legutóbbi Tranzakciók (Max 50)</h4>
           <div id="item-stats-tx-list" style="display:flex; flex-direction:column; gap:0.5rem;">
             <!-- JS tölti fel -->
           </div>
@@ -663,6 +684,6 @@
       </div>
     </div>
 
-    <script defer src="js/app.js?v=19"></script>
+    <script defer src="js/app.js?v=22"></script>
 </body>
 </html>
