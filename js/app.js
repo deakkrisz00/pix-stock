@@ -2958,10 +2958,12 @@ document.addEventListener("DOMContentLoaded", () => {
       tr.dataset.stock = item.central_stock || 0;
       
       tr.innerHTML = `
-        <td style="width: 40%; font-weight: 600;">${item.name}</td>
-        <td style="width: 30%; font-weight: 500; text-align: center;">${item.central_stock || 0} db</td>
-        <td style="width: 30%; text-align: right;">
-          <input type="number" inputmode="numeric" pattern="[0-9]*" class="styled-input inventory-actual-input" placeholder="db" min="0" style="width: 80px; text-align: center; font-size: 16px;" />
+        <td>
+          <div style="font-weight: 600; font-size: 1.1rem; color: var(--color-accent);">${item.name}</div>
+          <div style="font-size: 0.85rem; color: var(--color-subtext); margin-top: 0.3rem;">Gép szerint: <strong style="color:var(--color-text);">${item.central_stock || 0} db</strong></div>
+        </td>
+        <td style="vertical-align: middle; text-align: center; width: 100px;">
+          <input type="number" inputmode="numeric" pattern="[0-9]*" class="styled-input inventory-actual-input" placeholder="db" min="0" style="width: 100%; text-align: center; font-size: 16px !important; padding: 0.6rem 0.2rem;" />
         </td>
       `;
       tableBody.appendChild(tr);
