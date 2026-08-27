@@ -1177,9 +1177,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (tx.booth === 'bazar' || tx.booth === 'fenti') {
               boothSales[tx.booth] += qty;
             }
-          } else if (tx.type === 'selejt' && txMatchesFilter) {
+          } else if (tx.type === 'selejt' && txMatchesFilter && tx.booth !== 'kozponti') {
             totalItemsTaken = Math.max(0, totalItemsTaken - qty);
-            penSales[item.name] -= qty;
+            penSales[item.name] = Math.max(0, (penSales[item.name] || 0) - qty);
           }
         }
       });
@@ -2097,6 +2097,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (tx.booth === 'bazar')  kiviszBazar += qty;
         if (tx.booth === 'fenti')  kiviszFenti += qty;
         if (!lastKiviszDate) lastKiviszDate = new Date(tx.created_at);
+      } else if (tx.type === 'selejt' && tx.booth !== 'kozponti') {
+        totalKivisz = Math.max(0, totalKivisz - qty);
+        if (tx.booth === 'bazar')  kiviszBazar = Math.max(0, kiviszBazar - qty);
+        if (tx.booth === 'fenti')  kiviszFenti = Math.max(0, kiviszFenti - qty);
       } else if (tx.type === 'rendeles') {
         rendelesQty += qty;
         rendelesCount++;
@@ -2123,7 +2127,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const filterVal = filterSelect.value;
       
       const filteredTx = relevantTx.filter(tx => {
-        if (filterVal === 'all') return true;
+        if (filterVal === 'all') return tx.type !== 'osszeiras';
         return tx.type === filterVal;
       });
 
