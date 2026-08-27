@@ -1043,10 +1043,33 @@ document.addEventListener("DOMContentLoaded", () => {
   const lowStockTableBody = document.querySelector("#low-stock-table tbody");
   const statsTableBody = document.querySelector("#stats-table tbody");
 
+  let timelineChartInstance = null;
+  let boothPieChartInstance = null;
+
   async function loadStats() {
-    const days = parseInt(statsPeriodSelect?.value || "30", 10);
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - days);
+    const periodVal = statsPeriodSelect?.value || "30";
+    let fromDate = new Date();
+    let toDate = new Date();
+    let days = 30;
+
+    if (periodVal === "custom") {
+      const cStart = document.getElementById("custom-start-date")?.value;
+      const cEnd = document.getElementById("custom-end-date")?.value;
+      if (cStart) fromDate = new Date(cStart);
+      else fromDate.setDate(fromDate.getDate() - 30);
+      
+      if (cEnd) toDate = new Date(cEnd);
+      toDate.setHours(23, 59, 59, 999);
+      
+      const diffTime = Math.abs(toDate - fromDate);
+      days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (days === 0) days = 1;
+    } else {
+      days = parseInt(periodVal, 10);
+      fromDate.setDate(fromDate.getDate() - days);
+    }
+
+    const boothFilter = document.getElementById("stats-booth-filter")?.value || "all";
 
     if (statsCardsContainer) statsCardsContainer.innerHTML = `<div style="color:var(--color-subtext);">⏳ Adatok betöltése...</div>`;
     if (lowStockTableBody) lowStockTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center;">⏳ Betöltés...</td></tr>`;
@@ -1056,7 +1079,8 @@ document.addEventListener("DOMContentLoaded", () => {
       .from('transactions')
       .select('*')
       .in('type', ['kivisz', 'selejt'])
-      .gte('created_at', fromDate.toISOString());
+      .gte('created_at', fromDate.toISOString())
+      .lte('created_at', toDate.toISOString());
 
     let { data: namesData, error: namesError } = await supabaseClient
       .from('names')
@@ -1068,7 +1092,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Szűrés a legördülő alapján
+    // Szűrés kategória alapján
     const filterMode = currentFilterMode;
     if (filterMode === "CRITICAL") {
       namesData = namesData.filter(n => {
@@ -1078,25 +1102,51 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (filterMode !== "ALL") {
       namesData = namesData.filter(n => (n.category || 'C') === filterMode);
     }
+    
+    // Szűrés bódé alapján
+    let filteredTxData = txData;
+    if (boothFilter !== "all") {
+      filteredTxData = txData.filter(tx => tx.booth === boothFilter || tx.booth === 'mindketto');
+    }
 
     let totalItemsTaken = 0;
     const penSales = {};
+    const boothSales = { bazar: 0, fenti: 0 };
+    
+    // Chart adatok előkészítése
+    const dailyData = {};
+    for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+       const dStr = d.toLocaleDateString('hu-HU', { month: '2-digit', day: '2-digit' });
+       dailyData[dStr] = 0;
+    }
 
-    // Alaphelyzetbe hozzuk a listát a szűrt nevekkel, hogy a 0 darabosak is megjelenjenek
+    // Alaphelyzetbe hozzuk a listát a szűrt nevekkel
     (namesData || []).forEach(n => {
       penSales[n.name] = 0;
     });
 
     (txData || []).forEach(tx => {
       const items = Array.isArray(tx.items) ? tx.items : [];
+      const dateStr = new Date(tx.created_at).toLocaleDateString('hu-HU', { month: '2-digit', day: '2-digit' });
+      
+      let txMatchesFilter = (boothFilter === "all" || tx.booth === boothFilter || tx.booth === 'mindketto');
+
       items.forEach(item => {
-        // Csak akkor számoljuk, ha a kategória szűrőn átment a toll
         if (penSales[item.name] !== undefined) {
           const qty = Math.abs(item.qty || 0);
+          
           if (tx.type === 'kivisz') {
-            totalItemsTaken += qty;
-            penSales[item.name] += qty;
-          } else if (tx.type === 'selejt' && (tx.booth === 'bazar' || tx.booth === 'fenti')) {
+            if (txMatchesFilter) {
+              totalItemsTaken += qty;
+              penSales[item.name] += qty;
+              if (dailyData[dateStr] !== undefined) {
+                dailyData[dateStr] += qty;
+              }
+            }
+            if (tx.booth === 'bazar' || tx.booth === 'fenti') {
+              boothSales[tx.booth] += qty;
+            }
+          } else if (tx.type === 'selejt' && txMatchesFilter) {
             totalItemsTaken = Math.max(0, totalItemsTaken - qty);
             penSales[item.name] -= qty;
           }
@@ -1128,11 +1178,18 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    // Új mutatók kiszámolása
+    const avgDaily = (totalItemsTaken / days).toFixed(1);
+
     if (statsCardsContainer) {
       statsCardsContainer.innerHTML = `
         <div class="glass-card" style="padding:1.5rem; text-align:center; border-left: 4px solid var(--color-accent);">
           <div style="font-size:0.85rem; color:var(--color-subtext); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:1px;">Kivitt tollak (${days} nap)</div>
           <div style="font-size:2rem; font-weight:800; color:var(--color-text);">${totalItemsTaken} db</div>
+        </div>
+        <div class="glass-card" style="padding:1.5rem; text-align:center; border-left: 4px solid #f59e0b;">
+          <div style="font-size:0.85rem; color:var(--color-subtext); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:1px;">Átlagos napi fogyás</div>
+          <div style="font-size:2rem; font-weight:800; color:var(--color-text);">${avgDaily} db</div>
         </div>
         <div class="glass-card" style="padding:1.5rem; text-align:center; border-left: 4px solid #34d399;">
           <div style="font-size:0.85rem; color:var(--color-subtext); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:1px;">Legnépszerűbb toll</div>
@@ -1146,28 +1203,88 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
     }
 
-    // Sort by how far below the limit they are (most critical first)
-    // Ha ugyanannyira vannak a limit alatt, akkor az állvány hiány (rackShortage) alapján csökkenőbe
+    // Chart.js renderelés
+    if (window.Chart) {
+      Chart.defaults.color = '#9ca3af';
+      Chart.defaults.font.family = 'Inter, sans-serif';
+      
+      const ctxTimeline = document.getElementById('timeline-chart');
+      if (ctxTimeline) {
+        if (timelineChartInstance) timelineChartInstance.destroy();
+        timelineChartInstance = new Chart(ctxTimeline, {
+          type: 'line',
+          data: {
+            labels: Object.keys(dailyData),
+            datasets: [{
+              label: 'Kivitt mennyiség',
+              data: Object.values(dailyData),
+              borderColor: '#6366f1',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.3,
+              pointRadius: 3,
+              pointBackgroundColor: '#6366f1'
+            }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+      }
+
+      const ctxBooth = document.getElementById('booth-pie-chart');
+      if (ctxBooth) {
+        if (boothPieChartInstance) boothPieChartInstance.destroy();
+        boothPieChartInstance = new Chart(ctxBooth, {
+          type: 'doughnut',
+          data: {
+            labels: ['Bazár', 'Krisztián (fenti)'],
+            datasets: [{
+              data: [boothSales.bazar, boothSales.fenti],
+              backgroundColor: ['#f87171', '#34d399'],
+              borderWidth: 0,
+              hoverOffset: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: {
+              legend: { position: 'bottom' },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    let label = context.label || '';
+                    if (label) { label += ': '; }
+                    if (context.parsed !== null) {
+                      const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                      const percentage = total > 0 ? Math.round((context.parsed / total) * 100) + '%' : '0%';
+                      label += context.parsed + ' db (' + percentage + ')';
+                    }
+                    return label;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+
     stockList.sort((a, b) => {
       if (a.diff !== b.diff) return a.diff - b.diff;
       return b.rackShortage - a.rackShortage;
     });
+    
     if (lowStockTableBody) {
       lowStockTableBody.innerHTML = "";
-      const lowestStock = stockList; // Mutatjuk az összes kritikust, nem csak az első 15-öt
-      if (lowestStock.length === 0) {
+      if (stockList.length === 0) {
         lowStockTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--color-subtext);">Nincs kritikus készletű tétel! 🎉</td></tr>`;
       } else {
-        lowestStock.forEach(item => {
+        stockList.forEach(item => {
           let color = '#fbbf24';
           if (item.stock === 0) color = '#f87171';
-          
-          lowStockTableBody.innerHTML += `
-            <tr>
-              <td>${item.name}</td>
-              <td style="text-align:center; font-weight:bold; color:${color};">${item.stock} / ${item.limit}</td>
-            </tr>
-          `;
+          lowStockTableBody.innerHTML += `<tr><td>${item.name}</td><td style="text-align:center; font-weight:bold; color:${color};">${item.stock} / ${item.limit}</td></tr>`;
         });
       }
     }
@@ -1176,22 +1293,66 @@ document.addEventListener("DOMContentLoaded", () => {
       statsTableBody.innerHTML = "";
       const sortedSales = Object.entries(penSales).map(([name, qty]) => ({ name, qty })).sort((a, b) => b.qty - a.qty);
       if (sortedSales.length === 0) {
-        statsTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--color-subtext);">Nincs kivitel az elmúlt ${days} napban</td></tr>`;
+        statsTableBody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--color-subtext);">Nincs kivitel az elmúlt időszakban</td></tr>`;
       } else {
         sortedSales.forEach(item => {
-          statsTableBody.innerHTML += `
-            <tr>
-              <td>${item.name}</td>
-              <td style="text-align:center; font-weight:bold;">${item.qty}</td>
-            </tr>
-          `;
+          let extraStyle = item.qty === 0 ? 'color:var(--color-subtext);' : '';
+          statsTableBody.innerHTML += `<tr style="${extraStyle}"><td>${item.name}</td><td style="text-align:center; font-weight:bold;">${item.qty}</td></tr>`;
         });
       }
     }
   }
 
+  const boothFilterSelect = document.getElementById("stats-booth-filter");
+  boothFilterSelect?.addEventListener("change", loadStats);
   refreshStatsBtn?.addEventListener("pointerup", e => { e.preventDefault(); loadStats(); });
-  statsPeriodSelect?.addEventListener("change", loadStats);
+  
+  statsPeriodSelect?.addEventListener("change", (e) => {
+    const customContainer = document.getElementById("custom-date-container");
+    if (e.target.value === "custom") {
+      if (customContainer) customContainer.style.display = "flex";
+      // Auto-set today as end, 30 days ago as start if empty
+      const sDate = document.getElementById("custom-start-date");
+      const eDate = document.getElementById("custom-end-date");
+      if (!eDate.value) eDate.value = new Date().toISOString().split('T')[0];
+      if (!sDate.value) {
+        let d = new Date();
+        d.setDate(d.getDate() - 30);
+        sDate.value = d.toISOString().split('T')[0];
+      }
+    } else {
+      if (customContainer) customContainer.style.display = "none";
+    }
+    loadStats();
+  });
+
+  document.getElementById("custom-start-date")?.addEventListener("change", loadStats);
+  document.getElementById("custom-end-date")?.addEventListener("change", loadStats);
+
+  const exportStatsBtn = document.getElementById("export-stats-btn");
+  exportStatsBtn?.addEventListener("pointerup", (e) => {
+    e.preventDefault();
+    const rows = [["Toll Neve", "Kivitt mennyiseg"]];
+    const statsRows = document.querySelectorAll("#stats-table tbody tr");
+    
+    statsRows.forEach(tr => {
+      if(tr.cells.length >= 2 && !tr.cells[0].colSpan) {
+        const name = tr.cells[0].innerText.replace(/,/g, '');
+        const val = tr.cells[1].innerText;
+        rows.push([name, val]);
+      }
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + rows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    const days = statsPeriodSelect?.value || "30";
+    link.setAttribute("download", `pix_statisztika_${days}nap.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  });
 
   // ── ADMIN LOG SECTION ───────────────────────────────────────
   const refreshLogBtn = document.getElementById("refresh-log");
