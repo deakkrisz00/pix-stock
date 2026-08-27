@@ -468,6 +468,26 @@ body.light-theme .summary-item {
   .modal-box { max-height: 95vh; }
 }
 
+/* ── Chart Grid (Responsive) ── */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+@media (max-width: 640px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.chart-card {
+  min-width: 0; /* Prevents CSS grid blowout with Canvas */
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 /* ── Qty Control (shortage table) ── */
 .qty-wrap {
   display: flex;
