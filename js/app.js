@@ -525,11 +525,11 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadOrderNames() {
     const names = await fetchNames();
     
-    // Fetch total sold quantities
+    // Fetch total sold quantities (kivisz and selejt)
     const { data: salesData, error: salesErr } = await supabaseClient
       .from('transactions')
-      .select('items')
-      .eq('type', 'kivisz');
+      .select('type, booth, items')
+      .in('type', ['kivisz', 'selejt']);
       
     const soldMap = {};
     if (!salesErr && salesData) {
@@ -537,7 +537,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (Array.isArray(tx.items)) {
           tx.items.forEach(item => {
             if (item.name) {
-               soldMap[item.name] = (soldMap[item.name] || 0) + Math.abs(item.qty || 0);
+               const qty = Math.abs(item.qty || 0);
+               if (tx.type === 'kivisz') {
+                 soldMap[item.name] = (soldMap[item.name] || 0) + qty;
+               } else if (tx.type === 'selejt' && tx.booth !== 'kozponti') {
+                 soldMap[item.name] = (soldMap[item.name] || 0) - qty;
+               }
             }
           });
         }
@@ -1068,7 +1073,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let boothPieChartInstance = null;
 
   async function loadStats() {
-    const periodVal = statsPeriodSelect?.value || "30";
+    const periodVal = statsPeriodSelect?.value || "year";
     let fromDate = new Date();
     let toDate = new Date();
     let days = 30;
@@ -1082,6 +1087,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (cEnd) toDate = new Date(cEnd);
       toDate.setHours(23, 59, 59, 999);
       
+      const diffTime = Math.abs(toDate - fromDate);
+      days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (days === 0) days = 1;
+    } else if (periodVal === "year") {
+      fromDate = new Date(new Date().getFullYear(), 0, 1); // Jan 1st of current year (e.g., 2026)
       const diffTime = Math.abs(toDate - fromDate);
       days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       if (days === 0) days = 1;
@@ -2057,8 +2067,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let kiviszBazar    = 0;
     let kiviszFenti    = 0;
     let lastKiviszDate = null;
-    let osszeirasQty   = 0;
-    let osszeirasCount = 0;
     let rendelesQty    = 0;
     let rendelesCount  = 0;
 
@@ -2089,9 +2097,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (tx.booth === 'bazar')  kiviszBazar += qty;
         if (tx.booth === 'fenti')  kiviszFenti += qty;
         if (!lastKiviszDate) lastKiviszDate = new Date(tx.created_at);
-      } else if (tx.type === 'osszeiras') {
-        osszeirasQty += matchItem.qty || 0;
-        osszeirasCount++;
       } else if (tx.type === 'rendeles') {
         rendelesQty += qty;
         rendelesCount++;
@@ -2105,55 +2110,66 @@ document.addEventListener("DOMContentLoaded", () => {
       ? `Legutóbbi kivitel: ${lastKiviszDate.toLocaleString('hu-HU')}`
       : 'Még nem volt kivitel';
 
-    document.getElementById('stats-osszeiras-qty').textContent   = osszeirasQty;
-    document.getElementById('stats-osszeiras-count').textContent = osszeirasCount > 0
-      ? `${osszeirasCount} összeírásban szerepelt`
-      : 'Még nem szerepelt összeírásban';
-
     document.getElementById('stats-rendeles-qty').textContent   = rendelesQty;
     document.getElementById('stats-rendeles-count').textContent = rendelesCount > 0
       ? `${rendelesCount} rendelésben volt`
       : 'Még nem volt rendelésben';
 
     const txListEl = document.getElementById('item-stats-tx-list');
-    txListEl.innerHTML = '';
-    const recent = relevantTx.slice(0, 50);
-
-    if (recent.length === 0) {
-      txListEl.innerHTML = '<div style="color:var(--color-subtext); font-size:0.8rem; text-align:center; padding:0.5rem;">Nincs tranzakció ehhez a tollhoz.</div>';
-    } else {
-      recent.forEach(tx => {
-        const txItems = Array.isArray(tx.items) ? tx.items : [];
-        const matchItem = txItems.find(i => i.name === item.name);
-        let qty = 0;
-        if (matchItem) {
-          const rawQty = matchItem.qty !== undefined ? matchItem.qty : (matchItem.new_stock - matchItem.old_stock);
-          qty = Math.abs(rawQty || 0);
-        }
-        const meta = txTypeLabels[tx.type] || { icon: '❓', label: tx.type, color: 'var(--color-subtext)' };
-        const boothLabel = boothLabels[tx.booth] || tx.booth || '–';
-        const dateStr = new Date(tx.created_at).toLocaleString('hu-HU', {
-          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
-
-        let qtyDisplay = `${qty} db`;
-        if (tx.type === 'osszeiras' && matchItem && matchItem.fulfilled !== undefined && matchItem.fulfilled < matchItem.qty) {
-          qtyDisplay = `<span style="color:#f87171;">kért: ${matchItem.qty} / kapott: ${matchItem.fulfilled}</span>`;
-        }
-
-        const div = document.createElement('div');
-        div.style.cssText = `display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.6rem; border-radius:8px; background:rgba(255,255,255,0.04); border-left:3px solid ${meta.color}; margin-bottom:0.4rem;`;
-        div.innerHTML = `
-          <span style="font-size:1rem;">${meta.icon}</span>
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:0.8rem; font-weight:600; color:${meta.color};">${meta.label} · ${boothLabel}</div>
-            <div style="font-size:0.72rem; color:var(--color-subtext); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${dateStr} · ${tx.user_name || '–'}${tx.notes ? ' · ' + tx.notes : ''}</div>
-          </div>
-          <span style="font-size:0.85rem; font-weight:700; color:var(--color-text); white-space:nowrap;">${qtyDisplay}</span>
-        `;
-        txListEl.appendChild(div);
+    const filterSelect = document.getElementById('item-stats-filter');
+    
+    function renderTxList() {
+      txListEl.innerHTML = '';
+      const filterVal = filterSelect.value;
+      
+      const filteredTx = relevantTx.filter(tx => {
+        if (filterVal === 'all') return true;
+        return tx.type === filterVal;
       });
+
+      if (filteredTx.length === 0) {
+        txListEl.innerHTML = '<div style="color:var(--color-subtext); font-size:0.8rem; text-align:center; padding:0.5rem;">Nincs tranzakció ehhez a szűrőhöz.</div>';
+      } else {
+        filteredTx.forEach(tx => {
+          const txItems = Array.isArray(tx.items) ? tx.items : [];
+          const matchItem = txItems.find(i => i.name === item.name);
+          let qty = 0;
+          if (matchItem) {
+            const rawQty = matchItem.qty !== undefined ? matchItem.qty : (matchItem.new_stock - matchItem.old_stock);
+            qty = Math.abs(rawQty || 0);
+          }
+          const meta = txTypeLabels[tx.type] || { icon: '❓', label: tx.type, color: 'var(--color-subtext)' };
+          const boothLabel = boothLabels[tx.booth] || tx.booth || '–';
+          const dateStr = new Date(tx.created_at).toLocaleString('hu-HU', {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+          });
+
+          let qtyDisplay = `${qty} db`;
+          if (tx.type === 'osszeiras' && matchItem && matchItem.fulfilled !== undefined && matchItem.fulfilled < matchItem.qty) {
+            qtyDisplay = `<span style="color:#f87171;">kért: ${matchItem.qty} / kapott: ${matchItem.fulfilled}</span>`;
+          }
+
+          const div = document.createElement('div');
+          div.style.cssText = `display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.6rem; border-radius:8px; background:rgba(255,255,255,0.04); border-left:3px solid ${meta.color}; margin-bottom:0.4rem;`;
+          div.innerHTML = `
+            <span style="font-size:1rem;">${meta.icon}</span>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:0.8rem; font-weight:600; color:${meta.color};">${meta.label} · ${boothLabel}</div>
+              <div style="font-size:0.72rem; color:var(--color-subtext); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${dateStr} · ${tx.user_name || '–'}${tx.notes ? ' · ' + tx.notes : ''}</div>
+            </div>
+            <span style="font-size:0.85rem; font-weight:700; color:var(--color-text); white-space:nowrap;">${qtyDisplay}</span>
+          `;
+          txListEl.appendChild(div);
+        });
+      }
     }
+
+    if (filterSelect) {
+      filterSelect.value = 'all';
+      filterSelect.onchange = renderTxList;
+    }
+    
+    renderTxList();
 
     document.getElementById('item-stats-loading').classList.add('hidden');
     document.getElementById('item-stats-content').classList.remove('hidden');

@@ -212,8 +212,9 @@
               <option value="fenti">Krisztián (fenti)</option>
             </select>
             <select id="stats-period" class="styled-select">
+              <option value="year" selected>Idei év (2026)</option>
               <option value="7">Utolsó 7 nap</option>
-              <option value="30" selected>Utolsó 30 nap</option>
+              <option value="30">Utolsó 30 nap</option>
               <option value="90">Utolsó 90 nap</option>
               <option value="custom">Egyéni időszak...</option>
             </select>
@@ -681,13 +682,6 @@
             </div>
 
             <div style="display:flex; flex-direction:column; gap:0.8rem;">
-              <div class="glass-card" style="padding:0.8rem; border-left: 3px solid #a78bfa; flex:1;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span style="font-size:0.85rem; font-weight:bold;">Összeírás kért</span>
-                  <span id="stats-osszeiras-qty" style="font-size:1.1rem; font-weight:bold; color:#a78bfa;">0</span>
-                </div>
-                <div id="stats-osszeiras-count" style="font-size:0.7rem; color:var(--color-subtext);">0 összeírásban szerepelt</div>
-              </div>
               <div class="glass-card" style="padding:0.8rem; border-left: 3px solid #38bdf8; flex:1;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                   <span style="font-size:0.85rem; font-weight:bold;">Rendelés</span>
@@ -700,7 +694,16 @@
           </div>
 
           <!-- Tranzakció Lista -->
-          <h4 style="margin: 0 0 0.8rem 0; color: var(--color-subtext); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px;">Legutóbbi Tranzakciók (Max 50)</h4>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
+            <h4 style="margin: 0; color: var(--color-subtext); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px;">Tranzakciók (Idővonal)</h4>
+            <select id="item-stats-filter" class="styled-select" style="max-width: 150px; padding: 0.3rem 0.5rem; font-size: 0.8rem;">
+              <option value="all">Minden</option>
+              <option value="kivisz">Kivitel</option>
+              <option value="selejt">Selejt</option>
+              <option value="korrekcio">Módosítás</option>
+              <option value="leltar">Leltár</option>
+            </select>
+          </div>
           <div id="item-stats-tx-list" style="display:flex; flex-direction:column; gap:0.5rem;">
             <!-- JS tölti fel -->
           </div>
