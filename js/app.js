@@ -524,6 +524,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function loadOrderNames() {
     const names = await fetchNames();
+    
+    // Fetch total sold quantities
+    const { data: salesData, error: salesErr } = await supabaseClient
+      .from('transactions')
+      .select('items')
+      .eq('type', 'kivisz');
+      
+    const soldMap = {};
+    if (!salesErr && salesData) {
+      salesData.forEach(tx => {
+        if (Array.isArray(tx.items)) {
+          tx.items.forEach(item => {
+            if (item.name) {
+               soldMap[item.name] = (soldMap[item.name] || 0) + Math.abs(item.qty || 0);
+            }
+          });
+        }
+      });
+    }
+
     if (!orderTableBody) return;
     orderTableBody.innerHTML = "";
     names.forEach(item => {
@@ -553,6 +573,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </td>
         <td style="font-size: 0.85rem; color: var(--color-subtext); text-align: center;">${catIcon}</td>
         <td ${stockStyle} style="text-align: center; font-size: 1.1rem;">${stock}</td>
+        <td style="text-align: center; font-size: 1.1rem; color: #34d399; font-weight: bold;">${soldMap[item.name] || 0}</td>
         <td>
           <div class="qty-wrap" style="align-items: center; justify-content: center;">
             <div class="qty-quick-btns" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 100%;">
