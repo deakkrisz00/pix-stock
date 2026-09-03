@@ -1123,6 +1123,32 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    // Kiszámoljuk az összes hiányt az aktuálisan lekért adatokból
+    let totalBazar = 0;
+    let totalFenti = 0;
+    (namesData || []).forEach(n => {
+      totalBazar += (n.bazar_stock || 0);
+      totalFenti += (n.fenti_stock || 0);
+    });
+    const elAll = document.getElementById("total-missing-all");
+    const elBazar = document.getElementById("total-missing-bazar");
+    const elFenti = document.getElementById("total-missing-fenti");
+    if (elAll) elAll.textContent = `${totalBazar + totalFenti} db`;
+    if (elBazar) elBazar.textContent = `${totalBazar} db`;
+    if (elFenti) elFenti.textContent = `${totalFenti} db`;
+
+    if (periodVal === "year" && txData && txData.length > 0) {
+      const kiviszTxs = txData.filter(tx => tx.type === 'kivisz');
+      if (kiviszTxs.length > 0) {
+        const earliestTxDate = new Date(Math.min(...kiviszTxs.map(tx => new Date(tx.created_at))));
+        earliestTxDate.setHours(0, 0, 0, 0);
+        fromDate = earliestTxDate;
+        const diffTime = Math.abs(toDate - fromDate);
+        days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (days === 0) days = 1;
+      }
+    }
+
     // Szűrés kategória alapján
     const filterMode = currentFilterMode;
     if (filterMode === "CRITICAL") {
